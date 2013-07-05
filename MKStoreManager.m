@@ -33,6 +33,10 @@
 //	3) or a tweet mentioning @mugunthkumar
 //	4) A paypal donation to mugunth.kumar@gmail.com
 
+#import <Security/CMSDecoder.h>
+#import <Security/SecAsn1Coder.h>
+#import <Security/SecAsn1Templates.h>
+#import <Security/SecRequirement.h>
 
 #import "MKStoreManager.h"
 #import "SSKeychain.h"
@@ -44,7 +48,251 @@
 #error MKStoreKit is ARC only. Either turn on ARC for the project or use -fobjc-arc flag
 #endif
 
+#if TARGET_OS_MAC
+/*
+ * For OSX Validtion
+ */
+typedef struct {
+    size_t          length;
+    unsigned char   *data;
+} tMKASN1_Data;
+
+typedef struct {
+    tMKASN1_Data type;     // INTEGER
+    tMKASN1_Data version;  // INTEGER
+    tMKASN1_Data value;    // OCTET STRING
+} tMKReceiptAttribute;
+
+typedef struct {
+    tMKReceiptAttribute **attrs;
+} tMKReceiptPayload;
+
+// ASN.1 receipt attribute template
+static const SecAsn1Template kMKReceiptAttributeTemplate[] = {
+    { SEC_ASN1_SEQUENCE, 0, NULL, sizeof(tMKReceiptAttribute) },
+    { SEC_ASN1_INTEGER, offsetof(tMKReceiptAttribute, type), NULL, 0 },
+    { SEC_ASN1_INTEGER, offsetof(tMKReceiptAttribute, version), NULL, 0 },
+    { SEC_ASN1_OCTET_STRING, offsetof(tMKReceiptAttribute, value), NULL, 0 },
+    { 0, 0, NULL, 0 }
+};
+
+// ASN.1 receipt template set
+static const SecAsn1Template kMKSetOfReceiptAttributeTemplate[] = {
+    { SEC_ASN1_SET_OF, 0, kMKReceiptAttributeTemplate, sizeof(tMKReceiptPayload) },
+    { 0, 0, NULL, 0 }
+};
+
+enum {
+    kMKReceiptAttributeTypeInAppPurchaseReceipt    = 17,
+    
+    kMKReceiptAttributeTypeInAppQuantity               = 1701,
+    kMKReceiptAttributeTypeInAppProductID              = 1702,
+    kMKReceiptAttributeTypeInAppTransactionID          = 1703,
+    kMKReceiptAttributeTypeInAppPurchaseDate           = 1704,
+    kMKReceiptAttributeTypeInAppOriginalTransactionID  = 1705,
+    kMKReceiptAttributeTypeInAppOriginalPurchaseDate   = 1706,
+};
+
+static NSString *kMKReceiptInfoKeyInAppProductID               = @"in-app-id";
+static NSString *kMKReceiptInfoKeyInAppTransactionID           = @"in-app-trx-id";
+static NSString *kMKReceiptInfoKeyInAppOriginalTransactionID   = @"in-app-original-trx-id";
+static NSString *kMKReceiptInfoKeyInAppPurchaseDate            = @"in-app-date";
+static NSString *kMKReceiptInfoKeyInAppOriginalPurchaseDate    = @"in-app-original-date";
+static NSString *kMKReceiptInfoKeyInAppQuantity                = @"in-app-qnt";
+static NSString *kMKReceiptInfoKeyInAppPurchaseReceipt         = @"in-app-purchase-rctp";
+
+inline static NSData *MKDecodeReceiptData(NSData *receiptData)
+{
+    CMSDecoderRef decoder = NULL;
+    SecPolicyRef policyRef = NULL;
+    SecTrustRef trustRef = NULL;
+    
+    @try {
+        // Create a decoder
+        OSStatus status = CMSDecoderCreate(&decoder);
+        if (status) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to decode receipt data: Create a decoder", nil];
+        }
+        
+        // Decrypt the message (1)
+        status = CMSDecoderUpdateMessage(decoder, receiptData.bytes, receiptData.length);
+        if (status) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to decode receipt data: Update message", nil];
+        }
+        
+        // Decrypt the message (2)
+        status = CMSDecoderFinalizeMessage(decoder);
+        if (status) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to decode receipt data: Finalize message", nil];
+        }
+        
+        // Get the decrypted content
+        NSData *ret = nil;
+        CFDataRef dataRef = NULL;
+        status = CMSDecoderCopyContent(decoder, &dataRef);
+        if (status) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to decode receipt data: Get decrypted content", nil];
+        }
+        ret = [NSData dataWithData:(__bridge NSData *)dataRef];
+        CFRelease(dataRef);
+        
+        // Check the signature
+        size_t numSigners;
+        status = CMSDecoderGetNumSigners(decoder, &numSigners);
+        if (status) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to check receipt signature: Get singer count", nil];
+        }
+        if (numSigners == 0) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to check receipt signature: No signer found", nil];
+        }
+        
+        policyRef = SecPolicyCreateBasicX509();
+        
+        CMSSignerStatus signerStatus;
+        OSStatus certVerifyResult;
+        status = CMSDecoderCopySignerStatus(decoder, 0, policyRef, TRUE, &signerStatus, &trustRef, &certVerifyResult);
+        if (status) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to check receipt signature: Get signer status", nil];
+        }
+        if (signerStatus != kCMSSignerValid) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to check receipt signature: No valid signer", nil];
+        }
+        
+        return ret;
+    } @catch (NSException *e) {
+        @throw e;
+    } @finally {
+        if (policyRef) CFRelease(policyRef);
+        if (trustRef) CFRelease(trustRef);
+        if (decoder) CFRelease(decoder);
+    }
+}
+
+inline static int MKGetIntValueFromASN1Data(const tMKASN1_Data *asn1Data)
+{
+    int ret = 0;
+    for (int i = 0; i < asn1Data->length; i++) {
+        ret = (ret << 8) | asn1Data->data[i];
+    }
+    return ret;
+}
+
+inline static NSNumber *MKDecodeIntNumberFromASN1Data(SecAsn1CoderRef decoder, tMKASN1_Data srcData)
+{
+    tMKASN1_Data asn1Data;
+    OSStatus status = SecAsn1Decode(decoder, srcData.data, srcData.length, kSecAsn1IntegerTemplate, &asn1Data);
+    if (status) {
+        [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to get receipt information: Decode integer value", nil];
+    }
+    return [NSNumber numberWithInt:MKGetIntValueFromASN1Data(&asn1Data)];
+}
+
+inline static NSString *MKDecodeUTF8StringFromASN1Data(SecAsn1CoderRef decoder, tMKASN1_Data srcData)
+{
+    tMKASN1_Data asn1Data;
+    OSStatus status = SecAsn1Decode(decoder, srcData.data, srcData.length, kSecAsn1UTF8StringTemplate, &asn1Data);
+    if (status) {
+        [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to get receipt information: Decode UTF-8 string", nil];
+    }
+    return [[NSString alloc] initWithBytes:asn1Data.data length:asn1Data.length encoding:NSUTF8StringEncoding];
+}
+
+inline static NSDate *MKDecodeDateFromASN1Data(SecAsn1CoderRef decoder, tMKASN1_Data srcData)
+{
+    NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+    [dateFormatter setDateFormat:@"yyyy-MM-ddTHH:mm:ssZ"];
+    
+    tMKASN1_Data asn1Data;
+    OSStatus status = SecAsn1Decode(decoder, srcData.data, srcData.length, kSecAsn1IA5StringTemplate, &asn1Data);
+    if (status) {
+        [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to get receipt information: Decode date (IA5 string)", nil];
+    }
+    
+    NSString *dateStr = [[NSString alloc] initWithBytes:asn1Data.data length:asn1Data.length encoding:NSASCIIStringEncoding];
+    return [dateFormatter dateFromString:dateStr];
+}
+
+inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
+{
+    SecAsn1CoderRef asn1Decoder = NULL;
+    @try {
+        NSMutableDictionary *ret = [NSMutableDictionary dictionary];
+        
+        // Create the ASN.1 parser
+        OSStatus status = SecAsn1CoderCreate(&asn1Decoder);
+        if (status) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to get receipt information: Create ASN.1 decoder", nil];
+        }
+        
+        // Decode the receipt payload
+        tMKReceiptPayload payload = { NULL };
+        status = SecAsn1Decode(asn1Decoder, payloadData.bytes, payloadData.length, kMKSetOfReceiptAttributeTemplate, &payload);
+        if (status) {
+            [NSException raise:@"MacAppStore Receipt Validation Error" format:@"Failed to get receipt information: Decode payload", nil];
+        }
+        
+        // Fetch all attributes
+        tMKReceiptAttribute *anAttr;
+        for (int i = 0; (anAttr = payload.attrs[i]); i++) {
+            int type = MKGetIntValueFromASN1Data(&anAttr->type);
+            switch (type) {
+                case kMKReceiptAttributeTypeInAppProductID:
+                    [ret setValue:MKDecodeUTF8StringFromASN1Data(asn1Decoder, anAttr->value) forKey:kMKReceiptInfoKeyInAppProductID];
+                    break;
+                case kMKReceiptAttributeTypeInAppTransactionID:
+                    [ret setValue:MKDecodeUTF8StringFromASN1Data(asn1Decoder, anAttr->value) forKey:kMKReceiptInfoKeyInAppTransactionID];
+                    break;
+                case kMKReceiptAttributeTypeInAppOriginalTransactionID:
+                    [ret setValue:MKDecodeUTF8StringFromASN1Data(asn1Decoder, anAttr->value) forKey:kMKReceiptInfoKeyInAppOriginalTransactionID];
+                    break;
+                    
+                    // Purchase Date (As IA5 String (almost identical to the ASCII String))
+                case kMKReceiptAttributeTypeInAppPurchaseDate:
+                    [ret setValue:MKDecodeDateFromASN1Data(asn1Decoder, anAttr->value) forKey:kMKReceiptInfoKeyInAppPurchaseDate];
+                    break;
+                case kMKReceiptAttributeTypeInAppOriginalPurchaseDate:
+                    [ret setValue:MKDecodeDateFromASN1Data(asn1Decoder, anAttr->value) forKey:kMKReceiptInfoKeyInAppOriginalPurchaseDate];
+                    break;
+                    
+                    // Quantity (Integer Value)
+                case kMKReceiptAttributeTypeInAppQuantity:
+                    [ret setValue:MKDecodeIntNumberFromASN1Data(asn1Decoder, anAttr->value)
+                           forKey:kMKReceiptInfoKeyInAppQuantity];
+                    break;
+                    
+                    // In App Purchases Receipt
+                case kMKReceiptAttributeTypeInAppPurchaseReceipt: {
+                    NSMutableArray *inAppPurchases = [ret valueForKey:kMKReceiptInfoKeyInAppPurchaseReceipt];
+                    if (!inAppPurchases) {
+                        inAppPurchases = [NSMutableArray array];
+                        [ret setValue:inAppPurchases forKey:kMKReceiptInfoKeyInAppPurchaseReceipt];
+                    }
+                    NSData *inAppData = [NSData dataWithBytes:anAttr->value.data length:anAttr->value.length];
+                    NSDictionary *inAppInfo = MKGetReceiptPayload(inAppData);
+                    [inAppPurchases addObject:inAppInfo];
+                    break;
+                }
+                    
+                    // Otherwise
+                default:
+                    break;
+            }
+        }
+        return ret;
+    } @catch (NSException *e) {
+        @throw e;
+    } @finally {
+        if (asn1Decoder) SecAsn1CoderRelease(asn1Decoder);
+    }
+    
+}
+
+#endif
+
 @interface MKStoreManager (/* private methods and properties */)
+{
+    SecKeyRef _publicKeyRef;
+}
 
 @property (nonatomic, copy) void (^onTransactionCancelled)();
 @property (nonatomic, copy) void (^onTransactionCompleted)(NSString *productId, NSData* receiptData, NSArray* downloads);
@@ -85,7 +333,7 @@
 
         if(valueFromiCloud) {
             NSError *error = nil;
-            if ([SSKeychain setPassword:valueFromiCloud forService:[self.class serviceName] account:obj error:&error]) {
+            if ([SSKeychain setPassword:valueFromiCloud forService:[self.class serviceName] account:obj error:&error] && error) {
                 NSLog(@"%@", error);
             }
         }
@@ -116,7 +364,7 @@
         }
         
         NSError *error = nil;
-        if ([SSKeychain setPassword:objectString forService:[self.class serviceName] account:key error:&error]) {
+        if ([SSKeychain setPassword:objectString forService:[self.class serviceName] account:key error:&error] && error) {
             NSLog(@"%@", error);
         }
         
@@ -127,7 +375,7 @@
     } else {
         
         NSError *error = nil;
-        if ([SSKeychain deletePasswordForService:[self.class serviceName] account:key error:&error]) {
+        if ([SSKeychain deletePasswordForService:[self.class serviceName] account:key error:&error] && error) {
             NSLog(@"%@", error);
         }
         
@@ -170,6 +418,46 @@
     return [[MKStoreManager objectForKey:key] dataUsingEncoding:NSUTF8StringEncoding];
 }
 
+- (void)setPublicKey:(NSData *)publicKey
+{
+	if (!publicKey) {
+		return;
+	}
+    
+	OSStatus			status;
+	CFArrayRef			items		= NULL;
+	SecExternalFormat	format		= kSecFormatUnknown;
+	SecExternalItemType itemType	= kSecItemTypeUnknown;
+    
+	status = SecItemImport((__bridge CFDataRef)publicKey, NULL, &format, &itemType, CSSM_KEYATTR_EXTRACTABLE, NULL, NULL, &items);
+    
+	if ((format != kSecFormatOpenSSL) || (itemType != kSecItemTypePublicKey) || !items || (CFArrayGetCount(items) != 1)) {
+#ifdef DEBUG
+        if (status != noErr) {
+            NSString *errorMessage = (__bridge NSString *)SecCopyErrorMessageString(status, NULL);
+            NSLog(@"Unable to import public key: %@", errorMessage);
+        } else if (itemType != kSecItemTypePublicKey) {
+            NSLog(@"Unable to import public key: key is not public");
+        } else if (format != kSecFormatOpenSSL) {
+            NSLog(@"Unable to import public key: key is not in OpenSSL Format");
+        } else if (!items || (CFArrayGetCount(items) != 1)) {
+            NSLog(@"Unable to import public key: Provided data have no OpenSSL key info");
+        }
+#endif
+        
+		if (items) {
+			CFRelease(items);
+			items = NULL;
+		}
+        
+		return;
+	}
+    
+    _publicKeyRef = (SecKeyRef)CFRetain(CFArrayGetValueAtIndex(items, 0));
+}
+
+
+
 #pragma mark - Singleton Methods
 + (instancetype)sharedManager {
     static MKStoreManager *_sharedStoreManager = nil;
@@ -189,6 +477,7 @@
                                                      selector:@selector(updateFromiCloud:)
                                                          name:NSUbiquitousKeyValueStoreDidChangeExternallyNotification
                                                        object:nil];
+        
     });
     
     return _sharedStoreManager;
@@ -284,6 +573,78 @@
     return (error != nil);
 }
 
+- (BOOL)verifySignature:(NSData *)signature data:(NSData *)data
+{
+	if (([data length] == 0) || !signature) {
+		return NO;
+	}
+    
+	__block SecTransformRef			verifierTransform	= NULL;
+	__block SecGroupTransformRef	group				= SecTransformCreateGroupTransform();
+	__block CFReadStreamRef			readStream			= NULL;
+	__block SecTransformRef			readTransform		= NULL;
+    
+	Boolean			status = false;
+	CFBooleanRef	verifyStatus = NULL;
+    
+#define ver_cleanupBlock() ({ \
+if (verifierTransform) { CFRelease (verifierTransform); verifierTransform = NULL; } \
+if (group) { CFRelease (group); group = NULL; } \
+if (readStream) { CFRelease (readStream); readStream = NULL; } \
+if (readTransform) { CFRelease (readTransform); readTransform = NULL;} \
+})
+    
+	readStream		= CFReadStreamCreateWithBytesNoCopy (kCFAllocatorDefault, [data bytes], [data length], kCFAllocatorNull);
+	readTransform	= SecTransformCreateReadTransformWithReadStream(readStream);
+    
+	if (!readTransform) {
+		ver_cleanupBlock();
+		return -1;
+	}
+    
+	verifierTransform = SecVerifyTransformCreate(_publicKeyRef, (__bridge CFDataRef)signature, NULL);
+    
+	if (!verifierTransform) {
+		ver_cleanupBlock();
+		return -1;
+	}
+    
+	// Set to a digest input
+	status = SecTransformSetAttribute(verifierTransform, kSecInputIsDigest, kCFBooleanTrue, NULL);
+    
+	if (!status) {
+		ver_cleanupBlock();
+		return -1;
+	}
+    
+	// Set to a SHA1 digest input
+	status = SecTransformSetAttribute(verifierTransform, kSecDigestTypeAttribute, kSecDigestSHA1, NULL);
+    
+	if (!status) {
+		ver_cleanupBlock();
+		return -1;
+	}
+    
+	// Configure and then run group
+	SecTransformConnectTransforms(readTransform, kSecTransformOutputAttributeName, verifierTransform, kSecTransformInputAttributeName, group, NULL);
+    
+	// Execute group
+    CFErrorRef error = NULL;
+	verifyStatus = SecTransformExecute(group, &error);
+    
+    if (error) { CFRelease(error); error = NULL; }
+	ver_cleanupBlock();
+    
+    status = verifyStatus != NULL;
+    if (status)
+    {
+        status = CFBooleanGetValue(verifyStatus);
+        CFRelease(verifyStatus);
+    }
+    
+	return status == true;
+}
+
 #pragma mark - Delegation
 - (void)productsRequest:(SKProductsRequest *)request didReceiveResponse:(SKProductsResponse *)response
 {
@@ -317,7 +678,52 @@
 // call this function to check if the user has already purchased your feature
 + (BOOL)isFeaturePurchased:(NSString *)featureId
 {
-    return [[MKStoreManager numberForKey:featureId] boolValue];
+    @try {
+        if  ([[MKStoreManager numberForKey:featureId] boolValue]) {
+            NSData *receiptData = [[MKStoreManager objectForKey:[NSString stringWithFormat:@"%@-receipt", featureId]] dataUsingEncoding:NSUTF8StringEncoding];
+            
+            // For redeem  could be JSON
+            id jsonObject = receiptData ? [NSJSONSerialization JSONObjectWithData:receiptData options:0 error:NULL] : nil;
+            
+            if (jsonObject && [jsonObject isKindOfClass:[NSDictionary class]] && [jsonObject valueForKey:@"type"] && [jsonObject[@"type"] isEqualToString:@"redeem"]) {
+                NSDictionary *receiptObject = jsonObject[@"receipt"];
+                NSString *signature = jsonObject[@"signature"];
+                
+                BOOL validate = [receiptObject[@"hwid"] isEqualToString:[MKSKProduct deviceId]];
+                validate = validate && [receiptObject[@"product_id"] isEqualToString:featureId];
+                validate = validate && [[MKStoreManager sharedManager] verifySignature:[NSData dataFromBase64String:signature] data:[NSJSONSerialization dataWithJSONObject:receiptObject options:0 error:NULL]];
+                
+                return validate;
+            }
+            
+            // If this one from receipt - read receipt and validate it
+            if (!receiptData)
+            {
+                NSData *payloadData = MKDecodeReceiptData([[self sharedManager] receiptFromBundle]);
+                NSDictionary *inapps = MKGetReceiptPayload(payloadData);
+                if (inapps && [inapps valueForKey:kMKReceiptInfoKeyInAppPurchaseReceipt])
+                {
+                    __block BOOL result = NO;
+                    [inapps[kMKReceiptInfoKeyInAppPurchaseReceipt] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+                        if ([[obj valueForKey:kMKReceiptInfoKeyInAppProductID] isEqualToString:featureId]) {
+                            result = YES;
+                            *stop = YES;
+                        }
+                    }];
+                    
+                    return result;
+                }
+            }
+            
+        }
+        
+    }
+    @catch (NSException *exception) {
+        NSLog(@"Error validate in-app internal error: %@", [exception reason]);
+        
+    }
+
+    return NO;
 }
 
 - (BOOL)isSubscriptionActive:(NSString *)featureId
@@ -443,6 +849,45 @@
     } onError:^(NSError *error) {
          NSLog(@"Review request cannot be checked now: %@", [error description]);
          [self addToQueue:featureId];
+    }];
+}
+
+- (void)redeemFeature:(NSString *)featureId withCode:(NSString *)code forUser:(NSString *)name withEmail:(NSString *)email
+           onComplete:(void (^)(NSString *purchasedFeature, NSData *purchasedReceipt, NSArray *availableDownloads))completionBlock
+          onCancelled:(void (^)(void))cancelBlock;
+{
+    NSDictionary *userInfo = @{
+                               @"email" : email ? email : @"",
+                               @"name" : name ? name : @""
+                               };
+    [MKSKProduct redeemProduct:featureId withCode:code userInfo:userInfo onComplete:^(NSDictionary *receipt, NSString *signature) {
+        if (completionBlock) {
+            // Validate receipt data
+            if ([self verifySignature:[NSData dataFromBase64String:signature] data:[NSJSONSerialization dataWithJSONObject:receipt options:0 error:NULL]])
+            {
+                NSData *receiptData = [NSJSONSerialization dataWithJSONObject:@{
+                                       @"type" : @"redeem",
+                                       @"receipt" : receipt,
+                                       @"signature" : signature
+                                       } options:0 error:NULL];
+                
+                [self rememberPurchaseOfProduct:featureId withReceipt:receiptData];
+                completionBlock(featureId, receiptData, nil);
+            } else {
+                NSLog(@"MKStore Signature validation error");
+                if (cancelBlock) {
+                    cancelBlock();
+                }
+            }
+        }
+    } onError:^(NSError *e) {
+        NSLog(@"Error to redeem(%@): %@", featureId, e);
+        [self showAlertWithTitle:NSLocalizedString(@"In-App redemption problem", @"")
+                         message:e.localizedDescription];
+        
+        if (cancelBlock) {
+            cancelBlock();
+        }
     }];
 }
 

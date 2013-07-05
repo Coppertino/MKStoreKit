@@ -51,6 +51,8 @@
 
 @interface MKStoreManager : NSObject<SKProductsRequestDelegate, SKPaymentTransactionObserver>
 
+@property (nonatomic, retain) NSData	*publicKey;
+
 // These are the methods you will be using in your app
 + (MKStoreManager*)sharedManager;
 
@@ -69,9 +71,14 @@
 - (NSMutableArray*) purchasableObjectsDescription;
 
 // use this method to start a purchase
-- (void) buyFeature:(NSString*) featureId
-         onComplete:(void (^)(NSString* purchasedFeature, NSData*purchasedReceipt, NSArray* availableDownloads)) completionBlock
-        onCancelled:(void (^)(void)) cancelBlock;
+- (void)buyFeature:(NSString *)featureId
+        onComplete:(void (^)(NSString *purchasedFeature, NSData *purchasedReceipt, NSArray *availableDownloads))completionBlock
+       onCancelled:(void (^)(void))cancelBlock;
+
+// Method to redeem feaature insted of purchase
+- (void)redeemFeature:(NSString *)featureId withCode:(NSString *)code forUser:(NSString *)name withEmail:(NSString *)email
+           onComplete:(void (^)(NSString *purchasedFeature, NSData *purchasedReceipt, NSArray *availableDownloads))completionBlock
+          onCancelled:(void (^)(void))cancelBlock;
 
 // use this method to restore a purchase
 - (void) restorePreviousTransactionsOnComplete:(void (^)(void)) completionBlock
@@ -87,8 +94,8 @@
 
 // You wont' need this normally. MKStoreKit automatically takes care of remembering receipts.
 // but in case you want the receipt data to be posted to your server, use this.
-+(id) receiptForKey:(NSString*) key;
-+(void) setObject:(id) object forKey:(NSString*) key;
-+(NSNumber*) numberForKey:(NSString*) key;
++ (id)receiptForKey:(NSString *)key;
++ (void)setObject:(id)object forKey:(NSString *)key;
++ (NSNumber *)numberForKey:(NSString *)key;
 
 @end

@@ -34,21 +34,32 @@
 
 @interface MKSKProduct : NSObject 
 
-@property (nonatomic, copy) void (^onReceiptVerificationSucceeded)();
-@property (nonatomic, copy) void (^onReceiptVerificationFailed)();
-
 @property (nonatomic, strong) NSData *receipt;
-
 @property (nonatomic, strong) NSString *productId;
-@property (nonatomic, strong) NSURLConnection *theConnection;
-@property (nonatomic, strong) NSMutableData *dataFromConnection;
 
-- (void) verifyReceiptOnComplete:(void (^)(void)) completionBlock
-                         onError:(void (^)(NSError*)) errorBlock;
+/*!
+ * Basic construtor
+ * @param aProductId in-app id from itunes connect 
+ * @param aReceipt receipt data
+ * @retrun initialized instance
+ */
+- (id)initWithProductId:(NSString *)aProductId receiptData:(NSData *)aReceipt;
 
--(id) initWithProductId:(NSString*) aProductId receiptData:(NSData*) aReceipt;
+/*!
+ * Class method that help to find out device id
+ * @return device identificator
+ */
++ (NSString *)deviceId;
 
-+(void) verifyProductForReviewAccess:(NSString*) productId
-                          onComplete:(void (^)(NSNumber*)) completionBlock
-                             onError:(void (^)(NSError*)) errorBlock;
+/*!
+ * Mehtod that will perform remove verification of receipt from Apple
+ * @param completionBlock will be called when verification went well
+ * @param errorBlock will be called when verification perform problem
+ */
+- (void)verifyReceiptOnComplete:(void (^)(void))completionBlock onError:(void (^)(NSError *))errorBlock;
+
+#pragma mark - Helpers for server side verification
++ (void)verifyProductForReviewAccess:(NSString *)productId onComplete:(void (^)(NSNumber *))completionBlock onError:(void (^)(NSError *))errorBlock;
++ (void)redeemProduct:(NSString *)productId withCode:(NSString *)code userInfo:(NSDictionary *)userInfo onComplete:(void (^)(NSDictionary *receipt, NSString *signature))completionBlock onError:(void (^)(NSError *))errorBlock;
+
 @end
