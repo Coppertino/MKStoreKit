@@ -14,7 +14,7 @@ Pod::Spec.new do |s|
   s.source_files = '*.{h,m}', 'Externals/*.{h,m}'
   s.requires_arc = true
 
-  s.frameworks = 'StoreKit', 'Security', 'IOKit'
+  s.frameworks = 'StoreKit', 'Security', 'IOKit', 'SystemConfiguration'
   s.dependency 'SSKeychain'
   s.dependency 'AFNetworking'
 
