@@ -51,7 +51,6 @@
 
 @interface MKStoreManager : NSObject<SKProductsRequestDelegate, SKPaymentTransactionObserver>
 
-@property (nonatomic, retain) NSData	*publicKey;
 
 // These are the methods you will be using in your app
 + (MKStoreManager*)sharedManager;

@@ -290,9 +290,6 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 #endif
 
 @interface MKStoreManager (/* private methods and properties */)
-{
-    SecKeyRef _publicKeyRef;
-}
 
 @property (nonatomic, copy) void (^onTransactionCancelled)();
 @property (nonatomic, copy) void (^onTransactionCompleted)(NSString *productId, NSData* receiptData, NSArray* downloads);
@@ -418,45 +415,6 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
     return [[MKStoreManager objectForKey:key] dataUsingEncoding:NSUTF8StringEncoding];
 }
 
-- (void)setPublicKey:(NSData *)publicKey
-{
-	if (!publicKey) {
-		return;
-	}
-    
-	OSStatus			status;
-	CFArrayRef			items		= NULL;
-	SecExternalFormat	format		= kSecFormatUnknown;
-	SecExternalItemType itemType	= kSecItemTypeUnknown;
-    
-	status = SecItemImport((__bridge CFDataRef)publicKey, NULL, &format, &itemType, CSSM_KEYATTR_EXTRACTABLE, NULL, NULL, &items);
-    
-	if ((format != kSecFormatOpenSSL) || (itemType != kSecItemTypePublicKey) || !items || (CFArrayGetCount(items) != 1)) {
-#ifdef DEBUG
-        if (status != noErr) {
-            NSString *errorMessage = (__bridge NSString *)SecCopyErrorMessageString(status, NULL);
-            NSLog(@"Unable to import public key: %@", errorMessage);
-        } else if (itemType != kSecItemTypePublicKey) {
-            NSLog(@"Unable to import public key: key is not public");
-        } else if (format != kSecFormatOpenSSL) {
-            NSLog(@"Unable to import public key: key is not in OpenSSL Format");
-        } else if (!items || (CFArrayGetCount(items) != 1)) {
-            NSLog(@"Unable to import public key: Provided data have no OpenSSL key info");
-        }
-#endif
-        
-		if (items) {
-			CFRelease(items);
-			items = NULL;
-		}
-        
-		return;
-	}
-    
-    _publicKeyRef = (SecKeyRef)CFRetain(CFArrayGetValueAtIndex(items, 0));
-}
-
-
 
 #pragma mark - Singleton Methods
 + (instancetype)sharedManager {
@@ -576,71 +534,72 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 	if (([data length] == 0) || !signature) {
 		return NO;
 	}
-    
-	__block SecTransformRef			verifierTransform	= NULL;
-	__block SecGroupTransformRef	group				= SecTransformCreateGroupTransform();
-	__block CFReadStreamRef			readStream			= NULL;
-	__block SecTransformRef			readTransform		= NULL;
+
+	SecTransformRef			verifierTransform	= NULL;
+	SecGroupTransformRef	group				= SecTransformCreateGroupTransform();
+	CFReadStreamRef			readStream			= NULL;
+	SecTransformRef			readTransform		= NULL;
     
 	Boolean			status = false;
 	CFBooleanRef	verifyStatus = NULL;
     
-#define ver_cleanupBlock() ({ \
-if (verifierTransform) { CFRelease (verifierTransform); verifierTransform = NULL; } \
-if (group) { CFRelease (group); group = NULL; } \
-if (readStream) { CFRelease (readStream); readStream = NULL; } \
-if (readTransform) { CFRelease (readTransform); readTransform = NULL;} \
-})
-    
-	readStream		= CFReadStreamCreateWithBytesNoCopy (kCFAllocatorDefault, [data bytes], [data length], kCFAllocatorNull);
-	readTransform	= SecTransformCreateReadTransformWithReadStream(readStream);
-    
-	if (!readTransform) {
-		ver_cleanupBlock();
-		return -1;
-	}
-    
-	verifierTransform = SecVerifyTransformCreate(_publicKeyRef, (__bridge CFDataRef)signature, NULL);
-    
-	if (!verifierTransform) {
-		ver_cleanupBlock();
-		return -1;
-	}
-    
-	// Set to a digest input
-	status = SecTransformSetAttribute(verifierTransform, kSecInputIsDigest, kCFBooleanTrue, NULL);
-    
-	if (!status) {
-		ver_cleanupBlock();
-		return -1;
-	}
-    
-	// Set to a SHA1 digest input
-	status = SecTransformSetAttribute(verifierTransform, kSecDigestTypeAttribute, kSecDigestSHA1, NULL);
-    
-	if (!status) {
-		ver_cleanupBlock();
-		return -1;
-	}
-    
-	// Configure and then run group
-	SecTransformConnectTransforms(readTransform, kSecTransformOutputAttributeName, verifierTransform, kSecTransformInputAttributeName, group, NULL);
-    
-	// Execute group
-    CFErrorRef error = NULL;
-	verifyStatus = SecTransformExecute(group, &error);
-    
-    if (error) { CFRelease(error); error = NULL; }
-	ver_cleanupBlock();
-    
-    status = verifyStatus != NULL;
-    if (status)
-    {
-        status = CFBooleanGetValue(verifyStatus);
-        CFRelease(verifyStatus);
+    @try {
+        readStream		= CFReadStreamCreateWithBytesNoCopy (kCFAllocatorDefault, [data bytes], [data length], kCFAllocatorNull);
+        readTransform	= SecTransformCreateReadTransformWithReadStream(readStream);
+        
+        if (!readTransform) {
+            return -1;
+        }
+        
+        verifierTransform = SecVerifyTransformCreate(MKStoreKitConfigs.publicKey, (__bridge CFDataRef)signature, NULL);
+        
+        if (!verifierTransform) {
+            return -1;
+        }
+        
+        // Set to a digest input
+        status = SecTransformSetAttribute(verifierTransform, kSecInputIsDigest, kCFBooleanTrue, NULL);
+        
+        if (!status) {
+            return -1;
+        }
+        
+        // Set to a SHA1 digest input
+        status = SecTransformSetAttribute(verifierTransform, kSecDigestTypeAttribute, kSecDigestSHA1, NULL);
+        
+        if (!status) {
+            return -1;
+        }
+        
+        // Configure and then run group
+        SecTransformConnectTransforms(readTransform, kSecTransformOutputAttributeName, verifierTransform, kSecTransformInputAttributeName, group, NULL);
+        
+        // Execute group
+        CFErrorRef error = NULL;
+        verifyStatus = SecTransformExecute(group, &error);
+        
+        if (error) { CFRelease(error); error = NULL; }
+        
+        status = verifyStatus != NULL;
+        if (status)
+        {
+            status = CFBooleanGetValue(verifyStatus);
+            CFRelease(verifyStatus);
+        }
+        
+        return status == true;
+        
+    }
+    @catch (NSException *exception) {
+
+    }
+    @finally {
+        if (verifierTransform) { CFRelease (verifierTransform); verifierTransform = NULL; } \
+        if (group) { CFRelease (group); group = NULL; } \
+        if (readStream) { CFRelease (readStream); readStream = NULL; } \
+        if (readTransform) { CFRelease (readTransform); readTransform = NULL;} \
     }
     
-	return status == true;
 }
 
 #pragma mark - Delegation
@@ -687,7 +646,7 @@ if (readTransform) { CFRelease (readTransform); readTransform = NULL;} \
                 NSDictionary *receiptObject = jsonObject[@"receipt"];
                 NSString *signature = jsonObject[@"signature"];
                 
-                BOOL validate = [receiptObject[@"hwid"] isEqualToString:[MKSKProduct deviceId]];
+                BOOL validate = [receiptObject[@"hwid"] isEqualToString:MKStoreKitConfigs.deviceId];
                 validate = validate && [receiptObject[@"product_id"] isEqualToString:featureId];
                 validate = validate && [[MKStoreManager sharedManager] verifySignature:[NSData dataFromBase64String:signature] data:[NSJSONSerialization dataWithJSONObject:receiptObject options:0 error:NULL]];
                 

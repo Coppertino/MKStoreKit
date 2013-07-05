@@ -46,46 +46,6 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     AFHTTPClient *_serverClient;
 }
 
-+ (NSString *)deviceId
-{
-#if TARGET_OS_IPHONE
-    NSString *uniqueID;
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    id uuid = [defaults objectForKey:@"uniqueID"];
-    if (uuid)
-        uniqueID = (NSString *)uuid;
-    else {
-        CFUUIDRef cfUuid = CFUUIDCreate(NULL);
-        CFStringRef cfUuidString = CFUUIDCreateString(NULL, cfUuid);
-        CFRelease(cfUuid);
-        uniqueID = (__bridge NSString *)cfUuidString;
-        [defaults setObject:uniqueID forKey:@"uniqueID"];
-        CFRelease(cfUuidString);
-    }
-    
-    return uniqueID;
-    
-#elif TARGET_OS_MAC
-    NSString* result = nil;
-    
-    CFStringRef serialNumber = NULL;
-    io_service_t platformExpert = IOServiceGetMatchingService(kIOMasterPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
-    
-    if (platformExpert)	{
-        CFTypeRef serialNumberAsCFString = IORegistryEntryCreateCFProperty( platformExpert, CFSTR(kIOPlatformUUIDKey), kCFAllocatorDefault, 0 );
-        serialNumber = (CFStringRef)serialNumberAsCFString;
-        IOObjectRelease(platformExpert);
-    }
-    
-    if (serialNumber)
-        result = (__bridge_transfer NSString *)serialNumber;
-    else
-        result = @"unknown";
-    
-    return result;
-#endif
-}
-
 - (id)initWithProductId:(NSString *)aProductId receiptData:(NSData *)aReceipt
 {
     if ((self = [super init])) {
@@ -115,7 +75,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
         AFHTTPClient *client = [AFHTTPClient clientWithBaseURL:[MKStoreKitConfigs.ownServerURL URLByAppendingPathComponent:@"featureCheck.php"]];
         [client setParameterEncoding:AFFormURLParameterEncoding];
         
-        [client postPath:nil parameters:@{@"productid" : productId, @"udid" : [self deviceId]} success:^(AFHTTPRequestOperation *operation, id responseObject) {
+        [client postPath:nil parameters:@{@"productid" : productId, @"udid" : MKStoreKitConfigs.deviceId} success:^(AFHTTPRequestOperation *operation, id responseObject) {
             if ([[responseObject description] rangeOfString:@"YES"].location != NSNotFound && completionBlock) {
                 completionBlock(@YES);
             } else if (errorBlock) {
@@ -144,7 +104,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
         NSDictionary *params = @{
                                  @"productid" : productId,
                                  @"code" : code,
-                                 @"hwid" : [self deviceId],
+                                 @"hwid" : MKStoreKitConfigs.deviceId,
                                  @"email" : (userInfo && [userInfo valueForKey:@"email"]) ? userInfo[@"email"] : @"",
                                  @"name" : (userInfo && [userInfo valueForKey:@"name"]) ? userInfo[@"name"] : @""
                                  };

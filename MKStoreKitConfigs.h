@@ -45,6 +45,13 @@
 + (NSString *)sharedSecret;
 + (NSDictionary *)products;
 
+/*!
+ * Class method that help to find out device id
+ * @return device identificator
+ */
++ (NSString *)deviceId;
++ (SecKeyRef)publicKey;
+
 + (BOOL)isServerProductModel;
 + (BOOL)isReviewAllowed;
 + (BOOL)isRedeemAllowed;
@@ -54,6 +61,7 @@
 - (void)setReviewAllowed:(BOOL)flag;
 - (void)setRedeemAllowed:(BOOL)flag;
 - (void)setServerProductModel:(BOOL)flag;
+- (void)setPublicKeyString:(NSString *)publicKey;
 
 - (void)addConsumableProduct:(NSString *)productId withName:(NSString *)name andCount:(NSUInteger)count;
 - (void)addNonConsumableProduct:(NSString *)productId;

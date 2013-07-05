@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name     = 'MKStoreKit-cop'
-  s.version  = '4.99'
+  s.version  = '5.0'
   s.license  = { :type => 'MIT',
                  :text => 'MKStoreKit uses MIT Licensing And so all of my source code can
                            be used royalty-free into your app. Just make sure that you don’t
@@ -14,16 +14,9 @@ Pod::Spec.new do |s|
   s.source_files = '*.{h,m}', 'Externals/*.{h,m}'
   s.requires_arc = true
 
-  s.frameworks = 'StoreKit', 'Security'
+  s.frameworks = 'StoreKit', 'Security', 'IOKit'
   s.dependency 'SSKeychain'
   s.dependency 'AFNetworking'
 
-  def s.post_install(target) 
-    puts <<-TEXT
-      * MKStoreKit note *
-          Don't forget to create and add MKStoreKitConfigs.plist file to you project.
-          You can find an example here: https://github.com/Coppertino/MKStoreKit/blob/22223c77962179497038322b94d01277506570cc/MKStoreKitConfigs.plist
-    TEXT
-  end
 end
 

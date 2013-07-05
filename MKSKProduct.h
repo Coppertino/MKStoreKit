@@ -46,12 +46,6 @@
 - (id)initWithProductId:(NSString *)aProductId receiptData:(NSData *)aReceipt;
 
 /*!
- * Class method that help to find out device id
- * @return device identificator
- */
-+ (NSString *)deviceId;
-
-/*!
  * Mehtod that will perform remove verification of receipt from Apple
  * @param completionBlock will be called when verification went well
  * @param errorBlock will be called when verification perform problem
