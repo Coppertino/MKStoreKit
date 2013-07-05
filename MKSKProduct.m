@@ -91,8 +91,8 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     if ((self = [super init])) {
         self.productId = aProductId;
         self.receipt = aReceipt;
-        if (OWN_SERVER && SERVER_PRODUCT_MODEL) {
-            _serverClient = [AFHTTPClient clientWithBaseURL:OWN_SERVER];
+        if (MKStoreKitConfigs.ownServerURL && MKStoreKitConfigs.isServerProductModel) {
+            _serverClient = [AFHTTPClient clientWithBaseURL:MKStoreKitConfigs.ownServerURL];
             [_serverClient registerHTTPOperationClass:[AFJSONRequestOperation class]];
             [_serverClient setDefaultHeader:@"Accept" value:@"application/json;"];
             [_serverClient setParameterEncoding:AFFormURLParameterEncoding];
@@ -110,9 +110,9 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
                           onComplete:(void (^)(NSNumber *))completionBlock
                              onError:(void (^)(NSError *))errorBlock
 {
-    if(REVIEW_ALLOWED) {
+    if(MKStoreKitConfigs.isReviewAllowed) {
         
-        AFHTTPClient *client = [AFHTTPClient clientWithBaseURL:[OWN_SERVER URLByAppendingPathComponent:@"featureCheck.php"]];
+        AFHTTPClient *client = [AFHTTPClient clientWithBaseURL:[MKStoreKitConfigs.ownServerURL URLByAppendingPathComponent:@"featureCheck.php"]];
         [client setParameterEncoding:AFFormURLParameterEncoding];
         
         [client postPath:nil parameters:@{@"productid" : productId, @"udid" : [self deviceId]} success:^(AFHTTPRequestOperation *operation, id responseObject) {
@@ -135,8 +135,8 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
            onComplete:(void (^)(NSDictionary *receipt, NSString *signature))completionBlock
               onError:(void (^)(NSError *))errorBlock;
 {
-    if (REDEEM_ALLOWED && OWN_SERVER) {
-        AFHTTPClient *client = [AFHTTPClient clientWithBaseURL:[OWN_SERVER URLByAppendingPathComponent:@"redeemCode.php"]];
+    if (MKStoreKitConfigs.ownServerURL && MKStoreKitConfigs.isRedeemAllowed) {
+        AFHTTPClient *client = [AFHTTPClient clientWithBaseURL:[MKStoreKitConfigs.ownServerURL URLByAppendingPathComponent:@"redeemCode.php"]];
         [client registerHTTPOperationClass:[AFJSONRequestOperation class]];
         [client setDefaultHeader:@"Accept" value:@"application/json;"];
         [client setParameterEncoding:AFFormURLParameterEncoding];
@@ -178,7 +178,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 
 - (void)verifyReceiptOnComplete:(void (^)(void))completionBlock onError:(void (^)(NSError *))errorBlock
 {
-    [_serverClient postPath:[[OWN_SERVER path] stringByAppendingPathComponent:@"verifyProduct.php"] parameters:@{ @"receiptdata" : [self.receipt base64EncodedString]} success:^(AFHTTPRequestOperation *operation, id responseObject) {
+    [_serverClient postPath:[[MKStoreKitConfigs.ownServerURL path] stringByAppendingPathComponent:@"verifyProduct.php"] parameters:@{ @"receiptdata" : [self.receipt base64EncodedString]} success:^(AFHTTPRequestOperation *operation, id responseObject) {
 
         if (responseObject && [[responseObject valueForKey:@"result"] intValue] == 1) {
             if (completionBlock) {

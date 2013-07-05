@@ -486,9 +486,7 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 #pragma mark - Internal MKStoreKit functions
 + (NSDictionary *)storeKitItems
 {
-    return [NSDictionary dictionaryWithContentsOfFile:
-            [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:
-             @"MKStoreKitConfigs.plist"]];
+    return MKStoreKitConfigs.products;
 }
 
 - (void)restorePreviousTransactionsOnComplete:(void (^)(void)) completionBlock
@@ -1069,7 +1067,7 @@ if (readTransform) { CFRelease (readTransform); readTransform = NULL;} \
         // ping server and get response before serializing the product
         // this is a blocking call to post receipt data to your server
         // it should normally take a couple of seconds on a good 3G connection
-        if (OWN_SERVER && SERVER_PRODUCT_MODEL) {
+        if (MKStoreKitConfigs.ownServerURL && MKStoreKitConfigs.isServerProductModel) {
             MKSKProduct *thisProduct = [[MKSKProduct alloc] initWithProductId:productIdentifier receiptData:receiptData];
             
             [thisProduct verifyReceiptOnComplete:^{

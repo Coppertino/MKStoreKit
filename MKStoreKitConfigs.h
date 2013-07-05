@@ -36,24 +36,27 @@
 // To avoid making mistakes map plist entries to macroses as below and use them
 // instead of keys itself.
 //
-// #define kConsumableBaseFeatureId @"com.mycompany.myapp."
-// #define kFeatureAId @"com.mugunthkumar.caltasks.propack"
-// #define kConsumableFeatureBId @"com.mycompany.myapp.005"
-// #define FishBasket @"FishBasket"
 
-#ifndef SERVER_PRODUCT_MODEL
-    #define SERVER_PRODUCT_MODEL 0
-#endif
+@interface MKStoreKitConfigs : NSObject
 
-#ifndef OWN_SERVER
-    #define OWN_SERVER nil
-#endif
++ (instancetype)sharedConfigs;
 
-#ifndef REVIEW_ALLOWED
-    #define REVIEW_ALLOWED 0
-#endif
++ (NSURL *)ownServerURL;
++ (NSString *)sharedSecret;
++ (NSDictionary *)products;
 
-#warning Shared Secret Missing Ignore this warning if you don't use auto-renewable subscriptions
-#ifndef kSharedSecret
-    #define kSharedSecret @"<FILL IN YOUR SHARED SECRET HERE>"
-#endif
++ (BOOL)isServerProductModel;
++ (BOOL)isReviewAllowed;
++ (BOOL)isRedeemAllowed;
+
+- (void)setOwnServer:(NSURL *)url;
+- (void)setSharedSecret:(NSString *)secret;
+- (void)setReviewAllowed:(BOOL)flag;
+- (void)setRedeemAllowed:(BOOL)flag;
+- (void)setServerProductModel:(BOOL)flag;
+
+- (void)addConsumableProduct:(NSString *)productId withName:(NSString *)name andCount:(NSUInteger)count;
+- (void)addNonConsumableProduct:(NSString *)productId;
+- (void)addSubscription:(NSString *)productId andRenewInterval:(NSUInteger)interval;
+
+@end

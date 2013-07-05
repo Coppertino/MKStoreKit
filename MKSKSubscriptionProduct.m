@@ -32,6 +32,7 @@
 
 #import "MKSKSubscriptionProduct.h"
 #import "NSData+MKBase64.h"
+#import "MKStoreKitConfigs.h"
 #if ! __has_feature(objc_arc)
 #error MKStoreKit is ARC only. Either turn on ARC for the project or use -fobjc-arc flag
 #endif
@@ -68,7 +69,7 @@
 	[theRequest setHTTPMethod:@"POST"];
 	[theRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
 	
-    NSString *receiptString = [NSString stringWithFormat:@"{\"receipt-data\":\"%@\" \"password\":\"%@\"}", [self.receipt base64EncodedString], kSharedSecret];
+    NSString *receiptString = [NSString stringWithFormat:@"{\"receipt-data\":\"%@\" \"password\":\"%@\"}", [self.receipt base64EncodedString], MKStoreKitConfigs.sharedSecret];
     
 	NSString *length = [NSString stringWithFormat:@"%ld", [receiptString length]];
 	[theRequest setValue:length forHTTPHeaderField:@"Content-Length"];
