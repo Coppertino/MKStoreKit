@@ -37,10 +37,6 @@
 #error MKStoreKit is ARC only. Either turn on ARC for the project or use -fobjc-arc flag
 #endif
 
-#ifndef __IPHONE_5_0
-#error "MKStoreKit uses features (NSJSONSerialization) only available in iOS SDK  and later."
-#endif
-
 static void (^onReviewRequestVerificationSucceeded)();
 static void (^onReviewRequestVerificationFailed)();
 static NSURLConnection *sConnection;
@@ -48,8 +44,8 @@ static NSMutableData *sDataFromConnection;
 
 @implementation MKSKProduct
 
-+(NSString*) deviceId {
-  
++ (NSString *)deviceId
+{
 #if TARGET_OS_IPHONE
   NSString *uniqueID;
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
@@ -66,8 +62,8 @@ static NSMutableData *sDataFromConnection;
   }
   
   return uniqueID;
-#elif TARGET_OS_MAC 
-  
+
+#elif TARGET_OS_MAC
   kern_return_t			 kernResult;
 	mach_port_t			   master_port;
 	CFMutableDictionaryRef	matchingDict;
@@ -131,69 +127,66 @@ static NSMutableData *sDataFromConnection;
 // This function is only used if you want to enable in-app purchases for free for reviewers
 // Read my blog post http://mk.sg/31
 
-+(void) verifyProductForReviewAccess:(NSString*) productId
-                          onComplete:(void (^)(NSNumber*)) completionBlock
-                             onError:(void (^)(NSError*)) errorBlock
++ (void)verifyProductForReviewAccess:(NSString *)productId
+                          onComplete:(void (^)(NSNumber *))completionBlock
+                             onError:(void (^)(NSError *))errorBlock
 {
-  if(REVIEW_ALLOWED)
-  {
-    onReviewRequestVerificationSucceeded = [completionBlock copy];
-    onReviewRequestVerificationFailed = [errorBlock copy];
-    
-    NSString *uniqueID = [self deviceId];
-    // check udid and featureid with developer's server
+    if(REVIEW_ALLOWED) {
+        onReviewRequestVerificationSucceeded = [completionBlock copy];
+        onReviewRequestVerificationFailed = [errorBlock copy];
+        
+        NSString *uniqueID = [self deviceId];
+        // check udid and featureid with developer's server
 		
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/%@", OWN_SERVER, @"featureCheck.php"]];
-    
-    NSMutableURLRequest *theRequest = [NSMutableURLRequest requestWithURL:url 
-                                                              cachePolicy:NSURLRequestReloadIgnoringCacheData 
-                                                          timeoutInterval:60];
-    
-    [theRequest setHTTPMethod:@"POST"];		
-    [theRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
-    
-    NSString *postData = [NSString stringWithFormat:@"productid=%@&udid=%@", productId, uniqueID];
-    
-    NSString *length = [NSString stringWithFormat:@"%d", [postData length]];	
-    [theRequest setValue:length forHTTPHeaderField:@"Content-Length"];	
-    
-    [theRequest setHTTPBody:[postData dataUsingEncoding:NSASCIIStringEncoding]];
-    
-    sConnection = [NSURLConnection connectionWithRequest:theRequest delegate:self];    
-    [sConnection start];	
-  }
-  else
-  {
-    completionBlock([NSNumber numberWithBool:NO]);
-  }
+        NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/%@", OWN_SERVER, @"featureCheck.php"]];
+        
+        NSMutableURLRequest *theRequest = [NSMutableURLRequest requestWithURL:url
+                                                                  cachePolicy:NSURLRequestReloadIgnoringCacheData
+                                                              timeoutInterval:60];
+        
+        [theRequest setHTTPMethod:@"POST"];
+        [theRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+        
+        NSString *postData = [NSString stringWithFormat:@"productid=%@&udid=%@", productId, uniqueID];
+        
+        NSString *length = [NSString stringWithFormat:@"%ld", [postData length]];
+        [theRequest setValue:length forHTTPHeaderField:@"Content-Length"];
+        
+        [theRequest setHTTPBody:[postData dataUsingEncoding:NSASCIIStringEncoding]];
+        
+        sConnection = [NSURLConnection connectionWithRequest:theRequest delegate:self];
+        [sConnection start];
+    } else {
+        completionBlock([NSNumber numberWithBool:NO]);
+    }
 }
 
-- (void) verifyReceiptOnComplete:(void (^)(void)) completionBlock
-                         onError:(void (^)(NSError*)) errorBlock
+- (void)verifyReceiptOnComplete:(void (^)(void))completionBlock
+                        onError:(void (^)(NSError *))errorBlock
 {
-  self.onReceiptVerificationSucceeded = completionBlock;
-  self.onReceiptVerificationFailed = errorBlock;
-  
-  NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/%@", OWN_SERVER, @"verifyProduct.php"]];
+    self.onReceiptVerificationSucceeded = completionBlock;
+    self.onReceiptVerificationFailed = errorBlock;
+    
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/%@", OWN_SERVER, @"verifyProduct.php"]];
 	
-	NSMutableURLRequest *theRequest = [NSMutableURLRequest requestWithURL:url 
-                                                            cachePolicy:NSURLRequestReloadIgnoringCacheData 
-                                                        timeoutInterval:60];
+	NSMutableURLRequest *theRequest = [NSMutableURLRequest requestWithURL:url
+                                                              cachePolicy:NSURLRequestReloadIgnoringCacheData
+                                                          timeoutInterval:60];
 	
-	[theRequest setHTTPMethod:@"POST"];		
+	[theRequest setHTTPMethod:@"POST"];
 	[theRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
 	
 	NSString *receiptDataString = [self.receipt base64EncodedString];
-  
+    
 	NSString *postData = [NSString stringWithFormat:@"receiptdata=%@", receiptDataString];
 	
-	NSString *length = [NSString stringWithFormat:@"%d", [postData length]];	
-	[theRequest setValue:length forHTTPHeaderField:@"Content-Length"];	
+	NSString *length = [NSString stringWithFormat:@"%ld", [postData length]];
+	[theRequest setValue:length forHTTPHeaderField:@"Content-Length"];
 	
 	[theRequest setHTTPBody:[postData dataUsingEncoding:NSASCIIStringEncoding]];
 	
-  self.theConnection = [NSURLConnection connectionWithRequest:theRequest delegate:self];    
-  [self.theConnection start];	
+    self.theConnection = [NSURLConnection connectionWithRequest:theRequest delegate:self];
+    [self.theConnection start];
 }
 
 

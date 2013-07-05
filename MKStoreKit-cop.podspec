@@ -15,6 +15,7 @@ Pod::Spec.new do |s|
   s.requires_arc = true
 
   s.frameworks = 'StoreKit', 'Security'
+  s.dependency = 'SSKeychain'
 
   def s.post_install(target) 
     puts <<-TEXT
