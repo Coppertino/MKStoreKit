@@ -66,7 +66,7 @@
     }
     
     CFRelease(decoder);
-    NSData *data = (__bridge NSData *)decodedData;
+    NSData *data = (__bridge_transfer NSData *)decodedData;
     return data;
 }
 
@@ -109,7 +109,7 @@
     }
     
     CFRelease(encoder);
-    NSData *data = (__bridge NSData *)encodedData;
+    NSData *data = (__bridge_transfer NSData *)encodedData;
     NSString *base64String = [NSString stringWithUTF8String:[data bytes]];
     
     return base64String;

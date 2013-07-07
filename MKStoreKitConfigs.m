@@ -39,6 +39,10 @@
 - (void)dealloc
 {
     //clean public key
+    if (self._publicKeyRef) {
+        CFRelease(self._publicKeyRef);
+        self._publicKeyRef = NULL;
+    }
 }
 
 // ------------------------------------------------
@@ -164,7 +168,7 @@
 	if ((format != kSecFormatOpenSSL) || (itemType != kSecItemTypePublicKey) || !items || (CFArrayGetCount(items) != 1)) {
 #ifdef DEBUG
         if (status != noErr) {
-            NSString *errorMessage = (__bridge NSString *)SecCopyErrorMessageString(status, NULL);
+            NSString *errorMessage = (__bridge_transfer NSString *)SecCopyErrorMessageString(status, NULL);
             NSLog(@"Unable to import public key: %@", errorMessage);
         } else if (itemType != kSecItemTypePublicKey) {
             NSLog(@"Unable to import public key: key is not public");
@@ -183,7 +187,12 @@
 		return;
 	}
     
-    self._publicKeyRef = (SecKeyRef)CFRetain(CFArrayGetValueAtIndex(items, 0));
+    self._publicKeyRef = (SecKeyRef)CFArrayGetValueAtIndex(items, 0);
+    CFRetain(self._publicKeyRef);
+    if (items) {
+        CFRelease(items);
+        items = NULL;
+    }
 }
 
 - (void)addConsumableProduct:(NSString *)productId withName:(NSString *)name andCount:(NSUInteger)count;
