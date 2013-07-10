@@ -398,8 +398,8 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 {
     NSError *error = nil;
     id password = [SSKeychain passwordForService:[self.class serviceName] account:key error:&error];
-    if(error) {
-        NSLog(@"%@", error);
+    if(!password && error && [error code] != -25300) {
+        NSLog(@"MK:SSKeychain: %@", error);
     }
     
     return password;
@@ -607,7 +607,7 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 {
 	[self.purchasableObjects addObjectsFromArray:response.products];
 	
-#ifndef NDEBUG
+#ifdef DEBUG
     [self.purchasableObjects enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
         SKProduct *product = obj;
         NSLog(@"Feature: %@, Cost: %f, ID: %@", product.localizedTitle, [product.price doubleValue], product.productIdentifier);
@@ -725,8 +725,8 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
         // you might probably need to change this line to suit your UI needs
         NSString *description = [NSString stringWithFormat:@"%@ (%@)",[product localizedTitle], formattedString];
         
-#ifndef NDEBUG
-        NSLog(@"Product %ld - %@", idx, description);
+#ifdef DEBUG
+        NSLog(@"MK:Product %ld - %@", idx, description);
 #endif
         [productDescriptions addObject: description];
         
@@ -963,8 +963,8 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 #if TARGET_OS_IPHONE
             switch (download.downloadState) {
                 case SKDownloadStateFinished:
-#ifndef NDEBUG
-                    NSLog(@"Download finished: %@", [download description]);
+#ifdef DEBUG
+                    NSLog(@"MK:Download finished: %@", [download description]);
 #endif
                     [self provideContent:download.transaction.payment.productIdentifier
                               forReceipt:download.transaction.transactionReceipt
@@ -1096,9 +1096,9 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 - (void)failedTransaction: (SKPaymentTransaction *)transaction
 {
     
-#ifndef NDEBUG
-    NSLog(@"Failed transaction: %@", [transaction description]);
-    NSLog(@"error: %@", transaction.error);
+#ifdef DEBUG
+    NSLog(@"MK:Failed transaction: %@", [transaction description]);
+    NSLog(@"MK:Error: %@", transaction.error);
 #endif
 	
     [[SKPaymentQueue defaultQueue] finishTransaction: transaction];
@@ -1122,8 +1122,8 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
         
         [[SKPaymentQueue defaultQueue] startDownloads:transaction.downloads];
         // We don't have content yet, and we can't finish the transaction
-#ifndef NDEBUG
-        NSLog(@"Download(s) started: %@", [transaction description]);
+#ifdef DEBUG
+        NSLog(@"MK:Download(s) started: %@", [transaction description]);
 #endif
         return;
     }
@@ -1154,8 +1154,8 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
         
         [[SKPaymentQueue defaultQueue] startDownloads:transaction.downloads];
         // We don't have content yet, and we can't finish the transaction
-#ifndef NDEBUG
-        NSLog(@"Download(s) started: %@", [transaction description]);
+#ifdef DEBUG
+        NSLog(@"MK:Download(s) started: %@", [transaction description]);
 #endif
         return;
     }

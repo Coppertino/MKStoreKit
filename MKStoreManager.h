@@ -37,7 +37,7 @@
 #import <StoreKit/StoreKit.h>
 #import "MKStoreKitConfigs.h"
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #define kReceiptValidationURL @"https://sandbox.itunes.apple.com/verifyReceipt"
 #else
 #define kReceiptValidationURL @"https://buy.itunes.apple.com/verifyReceipt"
