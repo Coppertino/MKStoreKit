@@ -289,6 +289,8 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 
 #endif
 
+static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
+
 @interface MKStoreManager (/* private methods and properties */)
 
 @property (nonatomic, copy) void (^onTransactionCancelled)();
@@ -786,7 +788,7 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 
 - (void)buyFeature:(NSString *)featureId
         onComplete:(void (^)(NSString *, NSData *, NSArray *))completionBlock
-       onCancelled:(void (^)(void))cancelBlock
+       onCancelled:(void (^)(NSError *e))cancelBlock
 {
     self.onTransactionCompleted = completionBlock;
     self.onTransactionCancelled = cancelBlock;
@@ -811,7 +813,7 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
 
 - (void)redeemFeature:(NSString *)featureId withCode:(NSString *)code forUser:(NSString *)name withEmail:(NSString *)email
            onComplete:(void (^)(NSString *purchasedFeature, NSData *purchasedReceipt, NSArray *availableDownloads))completionBlock
-          onCancelled:(void (^)(void))cancelBlock;
+          onCancelled:(void (^)(NSError *e))cancelBlock;
 {
     NSDictionary *userInfo = @{
                                @"email" : email ? email : @"",
@@ -833,17 +835,19 @@ inline static NSDictionary *MKGetReceiptPayload(NSData *payloadData)
             } else {
                 NSLog(@"MKStore Signature validation error");
                 if (cancelBlock) {
-                    cancelBlock();
+                    cancelBlock([NSError errorWithDomain:kMKStoreErrorDomain code:-1 userInfo:@{NSLocalizedDescriptionKey : @"MKStore Signature validation error"}]);
                 }
             }
         }
     } onError:^(NSError *e) {
+#ifdef DEBUG
         NSLog(@"Error to redeem(%@): %@", featureId, e);
-        [self showAlertWithTitle:NSLocalizedString(@"In-App redemption problem", @"")
-                         message:e.localizedDescription];
+#endif
+//        [self showAlertWithTitle:NSLocalizedString(@"In-App redemption problem", @"")
+//                         message:e.localizedDescription];
         
         if (cancelBlock) {
-            cancelBlock();
+            cancelBlock(e);
         }
     }];
 }

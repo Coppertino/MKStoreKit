@@ -1,6 +1,5 @@
 <?php
-
-
+	include_once('common.inc.php');
 	header('Content-type: application/json');
 
 	$devmode = TRUE; // change this to FALSE after testing in sandbox
@@ -50,16 +49,6 @@
 	  }
 	  return $response;
 	}
-	
-	function logIt($file, $msg) {
-        // open file
-        $fd = fopen($file, "a");
-        // write string
-        fwrite($fd, $msg . "\n");
-        // close file
-        fclose($fd);
-	}
-	
 	
 	function logIt2($msg)
 	{

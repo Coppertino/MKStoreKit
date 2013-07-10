@@ -41,7 +41,7 @@
 		if (checkHardwareForRedeem($hwid, $code)) {
 			echo(generateResult($product, $hwid));
 		} elseif ($codeRequest['product_id'] > 0 && $codeRequest['code_id'] > 0 && $codeRequest['count'] > 0) {
-			if (canUseRedeemFromReqeust($codeRequest) || true) {
+			if (canUseRedeemFromReqeust($codeRequest)) {
 				redeemRequestForUser($codeRequest, $hwid, $user, $email);
 				echo(generateResult($product, $hwid));								
 			} else {
@@ -100,13 +100,17 @@
 	{
 		$count = $request['count'];
 		$redeemId = $request['code_id'];
-		
-		$r = mysql_query(sprintf('SELECT count(1) AS count FROM inapp_redeem_usage WHERE redeem_id = %d HAVING count < 1', $redeemId));
+		$q = sprintf('SELECT count(1) AS count FROM inapp_redeem_usage WHERE redeem_id = %d 
+					  HAVING count < (SELECT activations_count FROM inapp_redeem_codes where id = %d)', 
+					  
+					  $redeemId, $redeemId);
+
+		$r = mysql_query($q);
 		if (!$r) {
 			throw new Exception("Query Error: ".mysql_error());
 		}
 		
-		$result = mysql_num_rows($r) > 0;
+		$result = (mysql_num_rows($r) > 0);
 		mysql_free_result($r);
 		
 		return $result;
@@ -115,14 +119,15 @@
 	function redeemRequestForUser($request, $user_hwid, $user_email, $user_name)
 	{
 		$redeemId = $request['code_id'];
-		$r = mysql_query(sprintf("INSERT INTO inapp_redeem_usage(redeem_id, hwid, email, `name`) 
-									VALUES(%d, '%s', '%s', '%s') 
-									ON DUPLICATE KEY UPDATE issued = CURRENT_TIMESTAMP();",
-									$redeemId,
-									mysql_real_escape_string($user_hwid),
-									mysql_real_escape_string($user_email),
-									mysql_real_escape_string($user_name)
-		));
+		$q = sprintf("INSERT INTO inapp_redeem_usage(redeem_id, hwid, email, `name`) 
+						VALUES(%d, '%s', '%s', '%s') 
+						ON DUPLICATE KEY UPDATE issued = CURRENT_TIMESTAMP();",
+						$redeemId,
+						mysql_real_escape_string($user_hwid),
+						mysql_real_escape_string($user_email),
+						mysql_real_escape_string($user_name)
+		);
+		$r = mysql_query($q);
 		
 		if (!$r) {
 			throw new Exception("Query Error: ".mysql_error());
@@ -133,17 +138,22 @@
 	
 	function checkHardwareForRedeem($hwid, $redeem) 
 	{
-		$r = mysql_query(sprintf("SELECT issued FROM inapp_redeem_usage AS u 
+		$q = sprintf("SELECT issued FROM inapp_redeem_usage AS u 
 									LEFT JOIN inapp_redeem_codes AS c ON u.redeem_id = c.id
 								  WHERE c.code LIKE '%s' AND u.hwid LIKE '%s';",
 								  mysql_real_escape_string($redeem),
-								  mysql_real_escape_string($hwid)));
+								  mysql_real_escape_string($hwid));
+								  
+		$r = mysql_query($q);
 								  
 				if (!$r) {
 			throw new Exception("Query Error: ".mysql_error());
 		}
 		
 		$result = mysql_num_rows($r) > 0;
+		
+		logIt2("Query: ".$q);
+		logIt2("Number of rows: ". $result. " -- ".mysql_num_rows($r));
 		mysql_free_result($r);
 		
 		return $result;						  
@@ -169,4 +179,12 @@
 			return (json_encode(array("result" => false, "error" => "Signature update fail: ".openssl_error_string())));
 		}
 	}
+	
+	function logIt2($msg)
+	{
+		logIt('/tmp/DEBUG-'.basename(__FILE__).'.log', 
+		'['.date('Y-m-d H:i:s').'L:'.__LINE__.']:'.$msg
+		);
+	}
+
 ?>
