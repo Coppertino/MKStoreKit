@@ -1,33 +1,37 @@
 	
 <?php
-
-	$user = "mugunth1_udid";
-	$password = "wrong password";
-	$dbname = "mugunth1_udid";
+include_once('common.inc.php');
 	
 	$prod = filter_input(INPUT_POST, 'productid', FILTER_SANITIZE_NUMBER_INT);
 	$udid = filter_input(INPUT_POST, 'udid', FILTER_SANITIZE_STRING);
-	$email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL;
+	$email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
 	$message = filter_input(INPUT_POST, 'message', FILTER_SANITIZE_ENCODED);
-    // Connect to database server
 
-    $hd = mysql_connect("localhost", $user, $password)
-
-          or die ("Unable to connect");
-
-    // Select database
-
-    mysql_select_db ($dbname, $hd)
-
-          or die ("Unable to select database");
-
-    // Execute sample query (insert it into mksync all data in customer table)
-
-    $res = mysql_query("INSERT INTO mugunth1_udid.requests(udid, productid, email, message) VALUES ('".mysql_real_escape_string($udid)."', '".mysql_real_escape_string($prod)."', '".mysql_real_escape_string($email)."', '".mysql_real_escape_string($message)."')",$hd)
-
-          or die ("Unable to insert :-(");
+    /*
+	*  Setup MySQL
+	*/
+	$sql = mysql_connect(DB_HOST, DB_USER, DB_PASS) or die("Unable to connect");
+	mysql_select_db(DB_NAME, $sql) or die ("Unable to select database");
 	
- 	mysql_close($hd);
- 	
- 	echo "Done!";
+	$lastid = '';
+	$result = 'error';
+	
+	if (!empty($prod) && !empty($udid) && !empty($email)) {
+	    $query = sprintf("INSERT INTO inapp_requests(product_id, udid, email, message, status, lastUpdated) 
+	    					VALUES (%d, '%s', '%s', '%s', 0, CURRENT_TIMESTAMP())
+	    					ON DUPLICATE KEY UPDATE lastUpdated = CURRENT_TIMESTAMP(), email = '%s', message = '%s', status = '0'",
+	    					$prod, mysql_real_escape_string($udid), mysql_real_escape_string($email), mysql_real_escape_string($message),
+	    					mysql_real_escape_string($email), mysql_real_escape_string($message)
+	    					);
+	    					
+		
+	 	
+	 	$result = "ok";
+		
+	}
+
+	
+ 	mysql_close($sql);
+ 	die($result);
+
 ?>
