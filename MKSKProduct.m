@@ -76,7 +76,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
         [client setParameterEncoding:AFFormURLParameterEncoding];
         
         [client postPath:nil parameters:@{@"productid" : productId, @"udid" : MKStoreKitConfigs.deviceId} success:^(AFHTTPRequestOperation *operation, id responseObject) {
-            if ([[responseObject description] rangeOfString:@"YES"].location != NSNotFound && completionBlock) {
+            if ([[operation responseString] rangeOfString:@"YES"].location != NSNotFound && completionBlock) {
                 completionBlock(@YES);
             } else if (errorBlock) {
                 errorBlock(nil);
@@ -134,6 +134,15 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     } else if (errorBlock) {
         errorBlock([NSError errorWithDomain:kMKStoreErrorDomain code:-2 userInfo:@{NSLocalizedDescriptionKey : @"Redemption no allowed or server not set"}]);
     }
+}
+
++ (void)requestProductPreview:(NSString *)productId;
+{
+    NSURL *url = [MKStoreKitConfigs ownServerURL];
+    url = [NSURL URLWithString:[[url absoluteString] stringByAppendingFormat:@"openRequestPage.php?productid=%@&hwid=%@", productId,[MKStoreKitConfigs deviceId]]];
+    
+    [[NSWorkspace sharedWorkspace] openURL:url];
+    
 }
 
 - (void)verifyReceiptOnComplete:(void (^)(void))completionBlock onError:(void (^)(NSError *))errorBlock

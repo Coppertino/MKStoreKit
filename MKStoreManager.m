@@ -300,7 +300,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 @property (nonatomic, copy) void (^onRestoreCompleted)();
 
 @property (nonatomic, assign, getter=isProductsAvailable) BOOL isProductsAvailable;
-
+@property (nonatomic, strong) NSMutableArray *previewAllowedProducts;
 @property (nonatomic, strong) SKProductsRequest *productsRequest;
 
 + (NSString *)serviceName;
@@ -321,6 +321,9 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 
 + (void)updateFromiCloud:(NSNotification *)notificationObject
 {
+    if ([MKStoreKitConfigs isReviewAllowed]) {
+        return;
+    }
     NSLog(@"Updating from iCloud");
     
     NSUbiquitousKeyValueStore *iCloudStore = [NSUbiquitousKeyValueStore defaultStore];
@@ -341,7 +344,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 
 + (BOOL)iCloudAvailable
 {
-    if (NSClassFromString(@"NSUbiquitousKeyValueStore")) {      // is iOS 5?
+    if (![MKStoreKitConfigs isReviewAllowed] && NSClassFromString(@"NSUbiquitousKeyValueStore")) {      // is iOS 5?
         if ([NSUbiquitousKeyValueStore defaultStore]) {         // is iCloud enabled
             return YES;
         }
@@ -424,6 +427,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         _sharedStoreManager = [[self alloc] init];
+        _sharedStoreManager.previewAllowedProducts = [NSMutableArray array];
         _sharedStoreManager.purchasableObjects = [NSMutableArray array];
 #if defined (__IPHONE_6_0) || defined(NSAppKitVersionNumber10_7_2)
         _sharedStoreManager.hostedContents = [NSMutableArray array];
@@ -487,9 +491,24 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     [productsArray addObjectsFromArray:nonConsumables];
     [productsArray addObjectsFromArray:subscriptions];
     
-	self.productsRequest = [[SKProductsRequest alloc] initWithProductIdentifiers:[NSSet setWithArray:productsArray]];
-	self.productsRequest.delegate = self;
-	[self.productsRequest start];
+    if ([MKStoreKitConfigs isReviewAllowed]) {
+        [self.purchasableObjects addObjectsFromArray:consumables];
+        [self.purchasableObjects addObjectsFromArray:nonConsumables];
+        [self.purchasableObjects addObjectsFromArray:subscriptions];
+        
+        // request data from server
+        [self.purchasableObjects enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+           [MKSKProduct verifyProductForReviewAccess:obj onComplete:^(NSNumber *status) {
+               if ([status intValue] == 1) {
+                   [[[MKStoreManager sharedManager] previewAllowedProducts] addObject:obj];
+               }
+           } onError:NULL];
+        }];
+    } else {
+        self.productsRequest = [[SKProductsRequest alloc] initWithProductIdentifiers:[NSSet setWithArray:productsArray]];
+        self.productsRequest.delegate = self;
+        [self.productsRequest start];
+    }
 }
 
 + (NSMutableArray*)allProducts
@@ -637,6 +656,18 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 // call this function to check if the user has already purchased your feature
 + (BOOL)isFeaturePurchased:(NSString *)featureId
 {
+    if ([MKStoreKitConfigs isReviewAllowed]) {
+        __block BOOL purhcased = NO;
+        [[[MKStoreManager sharedManager] previewAllowedProducts] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+            if ([obj isEqualToString:featureId]) {
+                purhcased = YES;
+                *stop = YES;
+            }
+        }];
+        
+        return purhcased;
+    }
+    
     @try {
         if  ([[MKStoreManager numberForKey:featureId] boolValue]) {
             NSData *receiptData = [[MKStoreManager objectForKey:[NSString stringWithFormat:@"%@-receipt", featureId]] dataUsingEncoding:NSUTF8StringEncoding];
@@ -748,19 +779,24 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 - (NSMutableDictionary *)pricesDictionary
 {
     NSMutableDictionary *priceDict = [NSMutableDictionary dictionary];
-    [self.purchasableObjects enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
-        SKProduct *product = obj;
-        
-        NSNumberFormatter *numberFormatter = [[NSNumberFormatter alloc] init];
-        [numberFormatter setFormatterBehavior:NSNumberFormatterBehavior10_4];
-        [numberFormatter setNumberStyle:NSNumberFormatterCurrencyStyle];
-        [numberFormatter setLocale:product.priceLocale];
-        NSString *formattedString = [numberFormatter stringFromNumber:product.price];
-        
-        NSString *priceString = [NSString stringWithFormat:@"%@", formattedString];
-        [priceDict setObject:priceString forKey:product.productIdentifier];
-    }];
-
+    if ([MKStoreKitConfigs isReviewAllowed]) {
+        [self.purchasableObjects enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+            [priceDict setObject:@"Preview" forKey:obj];
+        }];
+    } else {
+        [self.purchasableObjects enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+            SKProduct *product = obj;
+            
+            NSNumberFormatter *numberFormatter = [[NSNumberFormatter alloc] init];
+            [numberFormatter setFormatterBehavior:NSNumberFormatterBehavior10_4];
+            [numberFormatter setNumberStyle:NSNumberFormatterCurrencyStyle];
+            [numberFormatter setLocale:product.priceLocale];
+            NSString *formattedString = [numberFormatter stringFromNumber:product.price];
+            
+            NSString *priceString = [NSString stringWithFormat:@"%@", formattedString];
+            [priceDict setObject:priceString forKey:product.productIdentifier];
+        }];
+    }
     return priceDict;
 }
 
@@ -802,12 +838,26 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
                 self.onTransactionCompleted(featureId, nil, nil);
             }
         } else {
-            [self addToQueue:featureId];
+            if ([MKStoreKitConfigs isReviewAllowed]) {
+                [MKSKProduct requestProductPreview:featureId];
+                if (cancelBlock) {
+                    cancelBlock(nil);
+                }
+            } else {
+                [self addToQueue:featureId];
+            }
         }
         
     } onError:^(NSError *error) {
-         NSLog(@"Review request cannot be checked now: %@", [error description]);
-         [self addToQueue:featureId];
+        NSLog(@"Review request cannot be checked now: %@", [error description]);
+        if ([MKStoreKitConfigs isReviewAllowed]) {
+            [MKSKProduct requestProductPreview:featureId];
+            if (cancelBlock) {
+                cancelBlock(nil);
+            }
+        } else {
+            [self addToQueue:featureId];
+        }
     }];
 }
 

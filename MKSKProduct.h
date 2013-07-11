@@ -56,4 +56,7 @@
 + (void)verifyProductForReviewAccess:(NSString *)productId onComplete:(void (^)(NSNumber *))completionBlock onError:(void (^)(NSError *))errorBlock;
 + (void)redeemProduct:(NSString *)productId withCode:(NSString *)code userInfo:(NSDictionary *)userInfo onComplete:(void (^)(NSDictionary *receipt, NSString *signature))completionBlock onError:(void (^)(NSError *))errorBlock;
 
++ (void)requestProductPreview:(NSString *)productId;
+
+
 @end
