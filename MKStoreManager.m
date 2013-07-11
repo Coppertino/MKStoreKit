@@ -811,7 +811,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     [alert show];
 #elif TARGET_OS_MAC
     NSAlert *alert = [[NSAlert alloc] init];
-    [alert addButtonWithTitle:NSLocalizedString(@"Dismiss", @"")];
+    [alert addButtonWithTitle:NSLocalizedString(@"Ok", @"")];
     
     [alert setMessageText:title];
     [alert setInformativeText:message];
@@ -831,8 +831,8 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     
     [MKSKProduct verifyProductForReviewAccess:featureId onComplete:^(NSNumber * isAllowed) {
         if ([isAllowed boolValue]) {
-            [self showAlertWithTitle:NSLocalizedString(@"Review request approved", @"")
-                             message:NSLocalizedString(@"You can use this feature for reviewing the app.", @"")];
+            [self showAlertWithTitle:NSLocalizedString(@"Application review request successfully approved.", @"")
+                             message:NSLocalizedString(@"You may now review Vox for a limited time with all the paid features enabled.", @"")];
             
             if(self.onTransactionCompleted) {
                 self.onTransactionCompleted(featureId, nil, nil);
