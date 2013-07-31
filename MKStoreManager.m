@@ -293,7 +293,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 
 @interface MKStoreManager (/* private methods and properties */)
 
-@property (nonatomic, copy) void (^onTransactionCancelled)();
+@property (nonatomic, copy) void (^onTransactionCancelled)(NSError *e);
 @property (nonatomic, copy) void (^onTransactionCompleted)(NSString *productId, NSData* receiptData, NSArray* downloads);
 
 @property (nonatomic, copy) void (^onRestoreFailed)(NSError* error);
@@ -499,6 +499,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
         // request data from server
         [self.purchasableObjects enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
            [MKSKProduct verifyProductForReviewAccess:obj onComplete:^(NSNumber *status) {
+               NSLog(@"loooking %@ res %@", obj, status);
                if ([status intValue] == 1) {
                    [[[MKStoreManager sharedManager] previewAllowedProducts] addObject:obj];
                }
@@ -1070,7 +1071,9 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
             receiptData = [self receiptFromBundle];
             if (!receiptData) {
                 if(self.onTransactionCancelled) {
-                    self.onTransactionCancelled(productIdentifier);
+                    self.onTransactionCancelled([NSError errorWithDomain:kMKStoreErrorDomain code:-102 userInfo:@{
+                                               NSLocalizedDescriptionKey: @"Unable to retrive store receipt data"
+                                        }]);
                 } else {
                     NSLog(@"Receipt invalid");
                 }
@@ -1089,7 +1092,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
                     self.onTransactionCompleted(productIdentifier, receiptData, hostedContent);
             } onError:^(NSError* error) {
                 if(self.onTransactionCancelled) {
-                    self.onTransactionCancelled(productIdentifier);
+                    self.onTransactionCancelled(error);
                 } else {
                     NSLog(@"The receipt could not be verified");
                 }
@@ -1158,7 +1161,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     [[SKPaymentQueue defaultQueue] finishTransaction: transaction];
     
     if(self.onTransactionCancelled)
-        self.onTransactionCancelled();
+        self.onTransactionCancelled(transaction.error);
 }
 
 - (void)completeTransaction:(SKPaymentTransaction *)transaction
