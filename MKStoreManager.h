@@ -58,6 +58,8 @@
 
 @property (nonatomic, strong) NSMutableArray *purchasableObjects;
 @property (nonatomic, strong) NSMutableDictionary *subscriptionProducts;
+@property (copy) BOOL (^advancedValidation)(NSString *featureId);
+
 #if defined(__IPHONE_6_0) || defined(NSFoundationVersionNumber10_7_4)
 @property (strong, nonatomic) NSMutableArray *hostedContents;
 @property (nonatomic, copy) void (^hostedContentDownloadStatusChangedHandler)(NSArray* hostedContent);

@@ -37,6 +37,7 @@
 #import <Security/SecAsn1Coder.h>
 #import <Security/SecAsn1Templates.h>
 #import <Security/SecRequirement.h>
+#import <CommonCrypto/CommonDigest.h>
 
 #import "MKStoreManager.h"
 #import "SSKeychain.h"
@@ -366,7 +367,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
         }
         
         NSError *error = nil;
-        if ([SSKeychain setPassword:objectString forService:[self.class serviceName] account:key error:&error] && error) {
+        if (![SSKeychain setPassword:objectString forService:[self.class serviceName] account:key error:&error] && error) {
             NSLog(@"%@", error);
         }
         
@@ -624,6 +625,20 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     
 }
 
+- (NSString *)MD5StringForString:(NSString *)string {
+    const char *cstr = [string UTF8String];
+    unsigned char result[16];
+    CC_MD5(cstr, strlen(cstr), result);
+    
+    return [NSString stringWithFormat:
+            @"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
+            result[0], result[1], result[2], result[3],
+            result[4], result[5], result[6], result[7],
+            result[8], result[9], result[10], result[11],
+            result[12], result[13], result[14], result[15]
+            ];  
+}
+
 #pragma mark - Delegation
 - (void)productsRequest:(SKProductsRequest *)request didReceiveResponse:(SKProductsResponse *)response
 {
@@ -687,6 +702,16 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
                 return validate;
             }
             
+            // MD5 for signature
+            if (jsonObject && [jsonObject isKindOfClass:[NSDictionary class]] && [jsonObject valueForKey:@"type"] && [jsonObject[@"type"] isEqualToString:@"store"]) {
+                NSDictionary *receiptObject = jsonObject[@"receipt"];
+                NSString *signature = jsonObject[@"signature"];
+                
+                BOOL validate = [[[self sharedManager] MD5StringForString:[NSString stringWithFormat:@"%@.%@.%@", [[NSBundle mainBundle] bundleIdentifier], featureId, MKStoreKitConfigs.deviceId]] isEqualToString:signature];
+                
+                return validate;
+            }
+            
             // If this one from receipt - read receipt and validate it
             if (!receiptData)
             {
@@ -704,8 +729,11 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
                     
                     return result;
                 }
+                
+                if ([[self sharedManager] advancedValidation]) {
+                    return [[self sharedManager] advancedValidation](featureId);
+                }
             }
-            
         }
         
     }
@@ -1087,7 +1115,14 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
             MKSKProduct *thisProduct = [[MKSKProduct alloc] initWithProductId:productIdentifier receiptData:receiptData];
             
             [thisProduct verifyReceiptOnComplete:^{
-                [self rememberPurchaseOfProduct:productIdentifier withReceipt:receiptData];
+                NSString *signature = [NSString stringWithFormat:@"%@.%@.%@", [[NSBundle mainBundle] bundleIdentifier], productIdentifier, MKStoreKitConfigs.deviceId];
+                signature = [self MD5StringForString:signature];
+                NSData *newReceiptData = [NSJSONSerialization dataWithJSONObject:@{
+                                          @"type" : @"store",
+                                          @"signature" : signature
+                                          } options:0 error:NULL];
+                
+                [self rememberPurchaseOfProduct:productIdentifier withReceipt:newReceiptData];
                 if (self.onTransactionCompleted)
                     self.onTransactionCompleted(productIdentifier, receiptData, hostedContent);
             } onError:^(NSError* error) {
@@ -1098,7 +1133,13 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
                 }
             }];
         } else {
-            [self rememberPurchaseOfProduct:productIdentifier withReceipt:receiptData];
+            NSString *signature = [NSString stringWithFormat:@"%@.%@.%@", [[NSBundle mainBundle] bundleIdentifier], productIdentifier, MKStoreKitConfigs.deviceId];
+            signature = [self MD5StringForString:signature];
+            NSData *newReceiptData = [NSJSONSerialization dataWithJSONObject:@{
+                                      @"type" : @"store",
+                                      @"signature" : signature
+                                      } options:0 error:NULL];
+            [self rememberPurchaseOfProduct:productIdentifier withReceipt:newReceiptData];
             if (self.onTransactionCompleted) {
                 self.onTransactionCompleted(productIdentifier, receiptData, hostedContent);
             }
