@@ -1090,6 +1090,9 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
             if (self.onTransactionCompleted) {
                 self.onTransactionCompleted(productIdentifier, receiptData, hostedContent);
             }
+            if (self.onRestoreCompleted)
+                [self restoreCompleted];
+            
         } onError:^(NSError* error) {
             NSLog(@"%@", [error description]);
         }];
@@ -1102,6 +1105,11 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
                     self.onTransactionCancelled([NSError errorWithDomain:kMKStoreErrorDomain code:-102 userInfo:@{
                                                NSLocalizedDescriptionKey: @"Unable to retrive store receipt data"
                                         }]);
+                } else if (self.onRestoreFailed) {
+                    [self restoreFailedWithError:[NSError errorWithDomain:kMKStoreErrorDomain code:-102 userInfo:@{
+                                               NSLocalizedDescriptionKey: @"Unable to retrive store receipt data"
+                                               }]];
+                    
                 } else {
                     NSLog(@"Receipt invalid");
                 }
@@ -1125,9 +1133,13 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
                 [self rememberPurchaseOfProduct:productIdentifier withReceipt:newReceiptData];
                 if (self.onTransactionCompleted)
                     self.onTransactionCompleted(productIdentifier, receiptData, hostedContent);
+                if (self.onRestoreCompleted)
+                    [self restoreCompleted];
             } onError:^(NSError* error) {
                 if(self.onTransactionCancelled) {
                     self.onTransactionCancelled(error);
+                } else if (self.onRestoreFailed) {
+                    [self restoreFailedWithError:error];
                 } else {
                     NSLog(@"The receipt could not be verified");
                 }
@@ -1142,7 +1154,8 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
             [self rememberPurchaseOfProduct:productIdentifier withReceipt:newReceiptData];
             if (self.onTransactionCompleted) {
                 self.onTransactionCompleted(productIdentifier, receiptData, hostedContent);
-            }
+            } else if (self.onRestoreCompleted)
+                [self restoreCompleted];
         }
     }
 }
@@ -1188,7 +1201,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 
 - (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue *)queue
 {
-    [self restoreCompleted];
+//    [self restoreCompleted];
 }
 
 - (void)failedTransaction: (SKPaymentTransaction *)transaction
@@ -1241,6 +1254,7 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 
 - (void)restoreTransaction:(SKPaymentTransaction *)transaction
 {
+    
 #if TARGET_OS_IPHONE
     NSArray *downloads = nil;
     
@@ -1267,7 +1281,6 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
               forReceipt:nil
            hostedContent:nil];
 #endif
-	
     [[SKPaymentQueue defaultQueue] finishTransaction: transaction];
 }
 
