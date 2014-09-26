@@ -10,7 +10,7 @@
 
 @interface MKStoreKitConfigs (/* Private */)
 
-@property (nonatomic) BOOL _reviewAllowed, _redeemAllowed, _serverProductModel;
+@property (nonatomic) BOOL _reviewAllowed, _redeemAllowed, _serverProductModel, _activationWithLicenseNumberAllowed;
 @property (nonatomic, copy) NSString *_sharedSecret;
 @property (nonatomic, copy) NSURL *_ownServerURL;
 @property (nonatomic) NSDictionary *_products;
@@ -62,6 +62,12 @@
 {
     return [self.sharedConfigs _redeemAllowed];
 }
+
++ (BOOL)isActivationWithLicenseNumberAllowed
+{
+    return [self.sharedConfigs _activationWithLicenseNumberAllowed];
+}
+
 
 + (NSURL *)ownServerURL;
 {
@@ -140,6 +146,10 @@
 - (void)setRedeemAllowed:(BOOL)flag;
 {
     self._redeemAllowed = flag;
+}
+
+-(void)setActivationWithLicenseNumberAllowed:(BOOL)flag {
+    self._activationWithLicenseNumberAllowed = flag;
 }
 
 - (void)setServerProductModel:(BOOL)flag;

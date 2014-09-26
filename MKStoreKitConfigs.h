@@ -55,11 +55,13 @@
 + (BOOL)isServerProductModel;
 + (BOOL)isReviewAllowed;
 + (BOOL)isRedeemAllowed;
++ (BOOL)isActivationWithLicenseNumberAllowed;
 
 - (void)setOwnServer:(NSURL *)url;
 - (void)setSharedSecret:(NSString *)secret;
 - (void)setReviewAllowed:(BOOL)flag;
 - (void)setRedeemAllowed:(BOOL)flag;
+- (void)setActivationWithLicenseNumberAllowed:(BOOL)flag;
 - (void)setServerProductModel:(BOOL)flag;
 - (void)setPublicKeyString:(NSString *)publicKey;
 

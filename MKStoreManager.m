@@ -325,7 +325,6 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     if ([MKStoreKitConfigs isReviewAllowed]) {
         return;
     }
-    NSLog(@"Updating from iCloud");
     
     NSUbiquitousKeyValueStore *iCloudStore = [NSUbiquitousKeyValueStore defaultStore];
     NSDictionary *dict = [iCloudStore dictionaryRepresentation];
@@ -688,37 +687,47 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
         if  ([[MKStoreManager numberForKey:featureId] boolValue]) {
             NSData *receiptData = [[MKStoreManager objectForKey:[NSString stringWithFormat:@"%@-receipt", featureId]] dataUsingEncoding:NSUTF8StringEncoding];
             
-            // For redeem  could be JSON
+            // For redeem or activation by license receipt will be JSON
             id jsonObject = receiptData ? [NSJSONSerialization JSONObjectWithData:receiptData options:0 error:NULL] : nil;
             
-            if (jsonObject && [jsonObject isKindOfClass:[NSDictionary class]] && [jsonObject valueForKey:@"type"] && [jsonObject[@"type"] isEqualToString:@"redeem"]) {
-                NSDictionary *receiptObject = jsonObject[@"receipt"];
-                NSString *signature = jsonObject[@"signature"];
+            BOOL isValidJson = jsonObject && [jsonObject isKindOfClass:[NSDictionary class]] && [jsonObject valueForKey:@"type"];
+            if (isValidJson) {
+            
+                // check for redeem or activation by license
+                if ([jsonObject[@"type"] isEqualToString:@"redeem"]
+                    || [jsonObject[@"type"] isEqualToString:@"activationByLicense"]) {
+                    
+                    NSDictionary *receiptObject = jsonObject[@"receipt"];
+                    NSString *signature = jsonObject[@"signature"];
+                    NSString *signatureProductId = receiptObject[@"productid"] ? receiptObject[@"productid"] : receiptObject[@"product_id"];
+                    
+                    NSString *receiptString = [NSString stringWithFormat:@"%@%@", receiptObject[@"productid"], receiptObject[@"hwid"]];
+                    
+                    BOOL validate = [receiptObject[@"hwid"] isEqualToString:MKStoreKitConfigs.deviceId];
+                    validate = validate && [signatureProductId isEqualToString:featureId];
+                    validate = validate && [[MKStoreManager sharedManager] verifySignature:[NSData dataFromBase64String:signature]
+                                                                                      data:[receiptString dataUsingEncoding:NSUTF8StringEncoding]];
+                    
+                    return validate;
+                }
                 
-                BOOL validate = [receiptObject[@"hwid"] isEqualToString:MKStoreKitConfigs.deviceId];
-                validate = validate && [receiptObject[@"product_id"] isEqualToString:featureId];
-                validate = validate && [[MKStoreManager sharedManager] verifySignature:[NSData dataFromBase64String:signature] data:[NSJSONSerialization dataWithJSONObject:receiptObject options:0 error:NULL]];
-                
-                return validate;
+                // check for receipt stored after MAS purchase
+                if ([jsonObject[@"type"] isEqualToString:@"store"]) {
+                    NSDictionary *receiptObject = jsonObject[@"receipt"];
+                    NSString *signature = jsonObject[@"signature"];
+                    
+                    NSString *srtingToCheck = [NSString stringWithFormat:@"%@.%@.%@", [[NSBundle mainBundle] bundleIdentifier], featureId, MKStoreKitConfigs.deviceId];
+                    BOOL validate = [[[self sharedManager] MD5StringForString:srtingToCheck] isEqualToString:signature];
+                    
+                    return validate;
+                }
             }
             
-            // MD5 for signature
-            if (jsonObject && [jsonObject isKindOfClass:[NSDictionary class]] && [jsonObject valueForKey:@"type"] && [jsonObject[@"type"] isEqualToString:@"store"]) {
-                NSDictionary *receiptObject = jsonObject[@"receipt"];
-                NSString *signature = jsonObject[@"signature"];
-                
-                BOOL validate = [[[self sharedManager] MD5StringForString:[NSString stringWithFormat:@"%@.%@.%@", [[NSBundle mainBundle] bundleIdentifier], featureId, MKStoreKitConfigs.deviceId]] isEqualToString:signature];
-                
-                return validate;
-            }
-            
-            // If this one from receipt - read receipt and validate it
-            if (!receiptData)
-            {
+            // If no one receipt is stored in Key Chain then check receipt in app MAS signature
+            if (!receiptData) {
                 NSData *payloadData = MKDecodeReceiptData([[self sharedManager] receiptFromBundle]);
                 NSDictionary *inapps = MKGetReceiptPayload(payloadData);
-                if (inapps && [inapps valueForKey:kMKReceiptInfoKeyInAppPurchaseReceipt])
-                {
+                if (inapps && [inapps valueForKey:kMKReceiptInfoKeyInAppPurchaseReceipt]) {
                     __block BOOL result = NO;
                     [inapps[kMKReceiptInfoKeyInAppPurchaseReceipt] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
                         if ([[obj valueForKey:kMKReceiptInfoKeyInAppProductID] isEqualToString:featureId]) {
@@ -919,12 +928,48 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
             }
         }
     } onError:^(NSError *e) {
-#ifdef DEBUG
-        NSLog(@"Error to redeem(%@): %@", featureId, e);
-#endif
-//        [self showAlertWithTitle:NSLocalizedString(@"In-App redemption problem", @"")
-//                         message:e.localizedDescription];
         
+        if (cancelBlock) {
+            cancelBlock(e);
+        }
+    }];
+}
+
+
+- (void)activateFeature:(NSString *)featureId
+      withLicenseNumber:(NSString *)licenseNumber
+             onComplete:(void (^)(NSString *purchasedFeature, NSData *purchasedReceipt))completionBlock
+            onCancelled:(void (^)(NSError *e))cancelBlock
+{
+    [MKSKProduct activateProduct:(NSString *)featureId
+               withLicenseNumber:(NSString *)licenseNumber
+                      onComplete:^(NSDictionary *receipt, NSString *signature) {
+                          
+        if (completionBlock) {
+            // Validate receipt data
+            
+            NSString *receiptString = [NSString stringWithFormat:@"%@%@", receipt[@"productid"], receipt[@"hwid"]];
+            
+            if ([self verifySignature:[NSData dataFromBase64String:signature]
+                                 data:[receiptString dataUsingEncoding:NSUTF8StringEncoding]]) {
+                
+                NSData *receiptData = [NSJSONSerialization dataWithJSONObject:@{
+                                                                                @"type" : @"activationByLicense",
+                                                                                @"receipt" : receipt,
+                                                                                @"signature" : signature
+                                                                                } options:0 error:NULL];
+                
+                [self rememberPurchaseOfProduct:featureId withReceipt:receiptData];
+                
+                completionBlock(featureId, receiptData);
+            } else {
+                NSLog(@"MKStore Signature validation error");
+                if (cancelBlock) {
+                    cancelBlock([NSError errorWithDomain:kMKStoreErrorDomain code:-1 userInfo:@{NSLocalizedDescriptionKey : @"MKStore Signature validation error"}]);
+                }
+            }
+        }
+    } onError:^(NSError *e) {
         if (cancelBlock) {
             cancelBlock(e);
         }

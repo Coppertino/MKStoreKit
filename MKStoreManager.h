@@ -50,38 +50,95 @@
 @interface MKStoreManager : NSObject<SKProductsRequestDelegate, SKPaymentTransactionObserver>
 
 
-// These are the methods you will be using in your app
+/**
+ Shared instance
+ */
 + (MKStoreManager*)sharedManager;
 
-// this is a class method, since it doesn't require the store manager to be initialized prior to calling
-+ (BOOL) isFeaturePurchased:(NSString*) featureId;
+/**
+ Check if feature purchased (is async when reviewAllowed = YES)
+ 
+ @param     featureId   Feature name
+ @returns   YES if feature is avaliable, NO otherwise
+ */
++ (BOOL)isFeaturePurchased:(NSString*) featureId;
 
 @property (nonatomic, strong) NSMutableArray *purchasableObjects;
 @property (nonatomic, strong) NSMutableDictionary *subscriptionProducts;
+/**
+ Advanced validation block applied for MAS purchases stored in MAS signature
+ */
 @property (copy) BOOL (^advancedValidation)(NSString *featureId);
 
 #if defined(__IPHONE_6_0) || defined(NSFoundationVersionNumber10_7_4)
+
 @property (strong, nonatomic) NSMutableArray *hostedContents;
 @property (nonatomic, copy) void (^hostedContentDownloadStatusChangedHandler)(NSArray* hostedContent);
+
 #endif
-// convenience methods
-//returns a dictionary with all prices for identifiers
+
+/**
+ Quick access method for avaliable product prices
+
+ @returns Dictionary with prices like @"Radio" => @"0.99"
+ */
 - (NSMutableDictionary *)pricesDictionary;
+
+/**
+ Quick access method for avaliable product description
+ 
+ @returns Array with descriptions like @"Radio (0.99)"
+ */
 - (NSMutableArray*) purchasableObjectsDescription;
 
-// use this method to start a purchase
+/**
+ Start purchase feature in MAS (in async mode)
+ 
+ @param     featureId       Feature name
+ @param     completionBlock Block to call on success
+ @param     completionBlock Block to call when error or cancel
+ */
 - (void)buyFeature:(NSString *)featureId
         onComplete:(void (^)(NSString *, NSData *, NSArray *))completionBlock
        onCancelled:(void (^)(NSError *e))cancelBlock;
 
-// Method to redeem feaature insted of purchase
+
+/**
+ Start restoration of previous purchases (in async mode)
+ 
+ @param     completionBlock Block to call on success
+ @param     completionBlock Block to call when error or cancel
+ */
+- (void) restorePreviousTransactionsOnComplete:(void (^)(void)) completionBlock
+                                       onError:(void (^)(NSError* error)) errorBlock;
+
+/**
+ Redeem feature for free access (in async mode)
+ 
+ @param     featureId       Feature name
+ @param     code            Redeem code (secret used for processing)
+ @param     user            User name
+ @param     email           User email
+ @param     completionBlock Block to call on success
+ @param     completionBlock Block to call when error or cancel
+ */
 - (void)redeemFeature:(NSString *)featureId withCode:(NSString *)code forUser:(NSString *)name withEmail:(NSString *)email
            onComplete:(void (^)(NSString *purchasedFeature, NSData *purchasedReceipt, NSArray *availableDownloads))completionBlock
           onCancelled:(void (^)(NSError *e))cancelBlock;
 
-// use this method to restore a purchase
-- (void) restorePreviousTransactionsOnComplete:(void (^)(void)) completionBlock
-                                       onError:(void (^)(NSError* error)) errorBlock;
+/**
+ Activate feature after purchase outside MAS by license number (in async mode)
+ 
+ @param     featureId       Feature name
+ @param     licenseNumber   License number (secret used for processing)
+ @param     completionBlock Block to call on success
+ @param     completionBlock Block to call when error or cancel
+ */
+- (void)activateFeature:(NSString *)featureId
+      withLicenseNumber:(NSString *)licenseNumber
+             onComplete:(void (^)(NSString *purchasedFeature, NSData *purchasedReceipt))completionBlock
+            onCancelled:(void (^)(NSError *e))cancelBlock;
+
 
 // For consumable support
 - (BOOL) canConsumeProduct:(NSString*) productName quantity:(int) quantity;

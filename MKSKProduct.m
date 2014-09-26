@@ -91,9 +91,11 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     }
 }
 
-+ (void)redeemProduct:(NSString *)productId withCode:(NSString *)code userInfo:(NSDictionary *)userInfo
++ (void)redeemProduct:(NSString *)productId
+             withCode:(NSString *)code
+             userInfo:(NSDictionary *)userInfo
            onComplete:(void (^)(NSDictionary *receipt, NSString *signature))completionBlock
-              onError:(void (^)(NSError *))errorBlock;
+              onError:(void (^)(NSError *))errorBlock
 {
     if (MKStoreKitConfigs.ownServerURL && MKStoreKitConfigs.isRedeemAllowed) {
         AFHTTPClient *client = [AFHTTPClient clientWithBaseURL:[MKStoreKitConfigs.ownServerURL URLByAppendingPathComponent:@"redeemCode.php"]];
@@ -132,7 +134,51 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
             }
         }];
     } else if (errorBlock) {
-        errorBlock([NSError errorWithDomain:kMKStoreErrorDomain code:-2 userInfo:@{NSLocalizedDescriptionKey : @"Redemption no allowed or server not set"}]);
+        errorBlock([NSError errorWithDomain:kMKStoreErrorDomain code:-2 userInfo:@{NSLocalizedDescriptionKey : @"Redemption is not allowed or server is not set"}]);
+    }
+}
+
++ (void)activateProduct:(NSString *)productId
+      withLicenseNumber:(NSString *)licenseNumber
+           onComplete:(void (^)(NSDictionary *receipt, NSString *signature))completionBlock
+              onError:(void (^)(NSError *))errorBlock
+{
+    if (MKStoreKitConfigs.ownServerURL && MKStoreKitConfigs.isActivationWithLicenseNumberAllowed) {
+        AFHTTPClient *client = [AFHTTPClient clientWithBaseURL:[MKStoreKitConfigs.ownServerURL URLByAppendingPathComponent:@"activate-product"]];
+        [client registerHTTPOperationClass:[AFJSONRequestOperation class]];
+        [client setDefaultHeader:@"Accept" value:@"application/json; text/html;"];
+        [client setParameterEncoding:AFFormURLParameterEncoding];
+        
+        NSDictionary *params = @{
+                                 @"productid" : productId,
+                                 @"licenseNumber" : licenseNumber,
+                                 @"hwid" : MKStoreKitConfigs.deviceId,
+                                };
+        
+        [client postPath:nil parameters:params success:^(AFHTTPRequestOperation *operation, id responseObject) {
+            if (responseObject && [responseObject valueForKey:@"result"] && [responseObject[@"result"] intValue] == 1) {
+                if (completionBlock) {
+                    completionBlock(responseObject[@"receipt"], responseObject[@"sign"]);
+                }
+            } else {
+                NSError *error = [NSError errorWithDomain:kMKStoreErrorDomain code:-10 userInfo:nil];
+                if (responseObject && [responseObject valueForKey:@"error"] && errorBlock) {
+                    error = [NSError errorWithDomain:kMKStoreErrorDomain code:-30 userInfo:@{
+                                                                                            NSLocalizedDescriptionKey : responseObject[@"error"]
+                                                                                            }];
+                }
+                
+                if (errorBlock) {
+                    errorBlock(error);
+                }
+            }
+        } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+            if (errorBlock) {
+                errorBlock(error);
+            }
+        }];
+    } else if (errorBlock) {
+        errorBlock([NSError errorWithDomain:kMKStoreErrorDomain code:-20 userInfo:@{NSLocalizedDescriptionKey : @"Activation is not allowed or server is not set"}]);
     }
 }
 

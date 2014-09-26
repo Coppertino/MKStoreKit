@@ -50,11 +50,26 @@
  * @param completionBlock will be called when verification went well
  * @param errorBlock will be called when verification perform problem
  */
-- (void)verifyReceiptOnComplete:(void (^)(void))completionBlock onError:(void (^)(NSError *))errorBlock;
+- (void)verifyReceiptOnComplete:(void (^)(void))completionBlock
+                        onError:(void (^)(NSError *))errorBlock;
 
 #pragma mark - Helpers for server side verification
-+ (void)verifyProductForReviewAccess:(NSString *)productId onComplete:(void (^)(NSNumber *))completionBlock onError:(void (^)(NSError *))errorBlock;
-+ (void)redeemProduct:(NSString *)productId withCode:(NSString *)code userInfo:(NSDictionary *)userInfo onComplete:(void (^)(NSDictionary *receipt, NSString *signature))completionBlock onError:(void (^)(NSError *))errorBlock;
+
++ (void)verifyProductForReviewAccess:(NSString *)productId
+                          onComplete:(void (^)(NSNumber *))completionBlock
+                             onError:(void (^)(NSError *))errorBlock;
+
++ (void)redeemProduct:(NSString *)productId
+             withCode:(NSString *)code
+             userInfo:(NSDictionary *)userInfo
+           onComplete:(void (^)(NSDictionary *receipt, NSString *signature))completionBlock
+              onError:(void (^)(NSError *))errorBlock;
+
++ (void)activateProduct:(NSString *)productId
+      withLicenseNumber:(NSString *)licenseNumber
+             onComplete:(void (^)(NSDictionary *receipt, NSString *signature))completionBlock
+                onError:(void (^)(NSError *))errorBlock;
+
 
 + (void)requestProductPreview:(NSString *)productId;
 
