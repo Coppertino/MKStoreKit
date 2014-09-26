@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name     = 'MKStoreKit-cop'
-  s.version  = '5.0'
+  s.version  = '5.1'
   s.license  = { :type => 'MIT',
                  :text => 'MKStoreKit uses MIT Licensing And so all of my source code can
                            be used royalty-free into your app. Just make sure that you don’t
