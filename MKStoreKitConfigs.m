@@ -12,7 +12,7 @@
 
 @property (nonatomic) BOOL _reviewAllowed, _redeemAllowed, _serverProductModel, _activationWithLicenseNumberAllowed;
 @property (nonatomic, copy) NSString *_sharedSecret;
-@property (nonatomic, copy) NSURL *_ownServerURL;
+@property (nonatomic, copy) NSURL *_ownServerURL, *_paymentServerURL;
 @property (nonatomic) NSDictionary *_products;
 @property (assign) SecKeyRef _publicKeyRef;
 
@@ -73,6 +73,9 @@
 {
     return [self.sharedConfigs _ownServerURL];
 }
++ (NSURL *)paymentServerURL {
+    return [self.sharedConfigs _paymentServerURL];
+}
 
 + (NSString *)sharedSecret;
 {
@@ -132,6 +135,10 @@
 - (void)setOwnServer:(NSURL *)url;
 {
     self._ownServerURL = url;
+}
+-(void)setPaymentServer:(NSURL *)url
+{
+    self._paymentServerURL = url;
 }
 - (void)setSharedSecret:(NSString *)secret;
 {

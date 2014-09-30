@@ -701,13 +701,18 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
                     NSString *signature = jsonObject[@"signature"];
                     NSString *signatureProductId = receiptObject[@"productid"] ? receiptObject[@"productid"] : receiptObject[@"product_id"];
                     
-                    NSString *receiptString = [NSString stringWithFormat:@"%@%@", receiptObject[@"productid"], receiptObject[@"hwid"]];
+                    NSData *receiptData;
+                    if ([jsonObject[@"type"] isEqualToString:@"activationByLicense"]) {
+                        NSString *receiptString = [NSString stringWithFormat:@"%@%@", receiptObject[@"productid"], receiptObject[@"hwid"]];
+                        receiptData = [receiptString dataUsingEncoding:NSUTF8StringEncoding];
+                    } else {
+                        receiptData = [NSJSONSerialization dataWithJSONObject:receiptObject options:0 error:NULL];
+                    }
                     
                     BOOL validate = [receiptObject[@"hwid"] isEqualToString:MKStoreKitConfigs.deviceId];
                     validate = validate && [signatureProductId isEqualToString:featureId];
                     validate = validate && [[MKStoreManager sharedManager] verifySignature:[NSData dataFromBase64String:signature]
-                                                                                      data:[receiptString dataUsingEncoding:NSUTF8StringEncoding]];
-                    
+                                                                                      data:receiptData];
                     return validate;
                 }
                 

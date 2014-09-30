@@ -42,6 +42,7 @@
 + (instancetype)sharedConfigs;
 
 + (NSURL *)ownServerURL;
++ (NSURL *)paymentServerURL;
 + (NSString *)sharedSecret;
 + (NSDictionary *)products;
 
@@ -58,6 +59,7 @@
 + (BOOL)isActivationWithLicenseNumberAllowed;
 
 - (void)setOwnServer:(NSURL *)url;
+- (void)setPaymentServer:(NSURL *)url;
 - (void)setSharedSecret:(NSString *)secret;
 - (void)setReviewAllowed:(BOOL)flag;
 - (void)setRedeemAllowed:(BOOL)flag;

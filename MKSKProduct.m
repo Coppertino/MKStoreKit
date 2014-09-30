@@ -143,10 +143,10 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
            onComplete:(void (^)(NSDictionary *receipt, NSString *signature))completionBlock
               onError:(void (^)(NSError *))errorBlock
 {
-    if (MKStoreKitConfigs.ownServerURL && MKStoreKitConfigs.isActivationWithLicenseNumberAllowed) {
-        AFHTTPClient *client = [AFHTTPClient clientWithBaseURL:[MKStoreKitConfigs.ownServerURL URLByAppendingPathComponent:@"activate-product"]];
+    if ([MKStoreKitConfigs paymentServerURL] && MKStoreKitConfigs.isActivationWithLicenseNumberAllowed) {
+        AFHTTPClient *client = [AFHTTPClient clientWithBaseURL:[[MKStoreKitConfigs paymentServerURL] URLByAppendingPathComponent:@"activate-product"]];
         [client registerHTTPOperationClass:[AFJSONRequestOperation class]];
-        [client setDefaultHeader:@"Accept" value:@"application/json; text/html;"];
+        [client setDefaultHeader:@"Accept" value:@"application/json;"];
         [client setParameterEncoding:AFFormURLParameterEncoding];
         
         NSDictionary *params = @{
