@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name     = 'MKStoreKit-cop'
-  s.version  = '5.1.1'
+  s.version  = '5.1.2'
   s.license  = { :type => 'MIT',
                  :text => 'MKStoreKit uses MIT Licensing And so all of my source code can
                            be used royalty-free into your app. Just make sure that you don’t
@@ -9,14 +9,15 @@ Pod::Spec.new do |s|
   s.summary  = 'In-App Purchases StoreKit for iOS devices.'
   s.homepage = 'https://github.com/Coppertino/MKStoreKit'
   s.author   = { 'Mugunth Kumar' => 'mugunth@steinlogic.com' }
-  s.source   = { :git => 'https://github.com/Coppertino/MKStoreKit.git', :branch => "master" }
-  s.platform = :osx, '10.7'
+  s.source   = { :git => 'https://github.com/Coppertino/MKStoreKit.git', :tag => "5.1.2" }
+  
+  s.platform = :osx, '10.8'
   s.source_files = '*.{h,m}', 'Externals/*.{h,m}'
   s.requires_arc = true
 
   s.frameworks = 'StoreKit', 'Security', 'IOKit', 'SystemConfiguration'
   s.dependency 'SSKeychain'
-  s.dependency 'AFNetworking'
+  s.dependency 'AFNetworking', '1.3.3'
 
 end
 
