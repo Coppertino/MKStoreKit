@@ -10,7 +10,7 @@
 
 @interface MKStoreKitConfigs (/* Private */)
 
-@property (nonatomic) BOOL _reviewAllowed, _redeemAllowed, _serverProductModel, _activationWithLicenseNumberAllowed;
+@property (nonatomic) BOOL _reviewAllowed, _redeemAllowed, _serverProductModel, _activationWithLicenseNumberAllowed, _shouldCheckSubscriptionOnAppleServer;
 @property (nonatomic, copy) NSString *_sharedSecret;
 @property (nonatomic, copy) NSURL *_ownServerURL, *_paymentServerURL;
 @property (nonatomic) NSDictionary *_products;
@@ -66,6 +66,10 @@
 + (BOOL)isActivationWithLicenseNumberAllowed
 {
     return [self.sharedConfigs _activationWithLicenseNumberAllowed];
+}
+
++ (BOOL)shouldCheckSubscriptionOnAppleServer {
+    return [self.sharedConfigs _shouldCheckSubscriptionOnAppleServer];
 }
 
 
@@ -211,6 +215,11 @@
         items = NULL;
     }
 }
+
+-(void)setShouldCheckSubscriptionOnAppleServer:(BOOL)flag {
+    self._shouldCheckSubscriptionOnAppleServer = flag;
+}
+
 
 - (void)addConsumableProduct:(NSString *)productId withName:(NSString *)name andCount:(NSUInteger)count;
 {

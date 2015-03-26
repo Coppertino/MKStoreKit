@@ -1133,19 +1133,28 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
     MKSKSubscriptionProduct *subscriptionProduct = [self.subscriptionProducts objectForKey:productIdentifier];
     if(subscriptionProduct) {
         subscriptionProduct.receipt = receiptData;
-        [subscriptionProduct verifyReceiptOnComplete:^(NSNumber* isActive) {
-            [[NSNotificationCenter defaultCenter] postNotificationName:kSubscriptionsPurchasedNotification object:productIdentifier];
-            
+        if (MKStoreKitConfigs.shouldCheckSubscriptionOnAppleServer) {
+            [subscriptionProduct verifyReceiptOnComplete:^(NSNumber* isActive) {
+                [[NSNotificationCenter defaultCenter] postNotificationName:kSubscriptionsPurchasedNotification object:productIdentifier];
+                
+                [MKStoreManager setObject:receiptData forKey:productIdentifier];
+                if (self.onTransactionCompleted) {
+                    self.onTransactionCompleted(productIdentifier, receiptData, hostedContent);
+                }
+                if (self.onRestoreCompleted)
+                    [self restoreCompleted];
+                
+            } onError:^(NSError* error) {
+                NSLog(@"%@", [error description]);
+            }];
+        } else {
             [MKStoreManager setObject:receiptData forKey:productIdentifier];
             if (self.onTransactionCompleted) {
                 self.onTransactionCompleted(productIdentifier, receiptData, hostedContent);
             }
             if (self.onRestoreCompleted)
                 [self restoreCompleted];
-            
-        } onError:^(NSError* error) {
-            NSLog(@"%@", [error description]);
-        }];
+        }
     } else {
         if (!receiptData) {
             // Could be a mac in app receipt. Read from receipts and verify here

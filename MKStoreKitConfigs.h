@@ -57,6 +57,7 @@
 + (BOOL)isReviewAllowed;
 + (BOOL)isRedeemAllowed;
 + (BOOL)isActivationWithLicenseNumberAllowed;
++ (BOOL)shouldCheckSubscriptionOnAppleServer;
 
 - (void)setOwnServer:(NSURL *)url;
 - (void)setPaymentServer:(NSURL *)url;
@@ -66,6 +67,7 @@
 - (void)setActivationWithLicenseNumberAllowed:(BOOL)flag;
 - (void)setServerProductModel:(BOOL)flag;
 - (void)setPublicKeyString:(NSString *)publicKey;
+- (void)setShouldCheckSubscriptionOnAppleServer:(BOOL)flag;
 
 - (void)addConsumableProduct:(NSString *)productId withName:(NSString *)name andCount:(NSUInteger)count;
 - (void)addNonConsumableProduct:(NSString *)productId;
