@@ -193,7 +193,19 @@ static NSString * const kMKStoreErrorDomain = @"MKStoreKitErrorDomain";
 
 - (void)verifyReceiptOnComplete:(void (^)(void))completionBlock onError:(void (^)(NSError *))errorBlock
 {
-    [_serverClient postPath:[[MKStoreKitConfigs.ownServerURL path] stringByAppendingPathComponent:@"verifyProduct.php"] parameters:@{ @"receiptdata" : [self.receipt base64EncodedString]} success:^(AFHTTPRequestOperation *operation, id responseObject) {
+    NSString *receiptData = [self.receipt base64EncodedString];
+    if (!receiptData) {
+        if (errorBlock) {
+            NSError *error = [NSError errorWithDomain:kMKStoreErrorDomain
+                                                 code:-10
+                                             userInfo:@{NSLocalizedDescriptionKey:@"Receipt not found"}];
+            errorBlock(error);
+        }
+        return;
+    }
+    [_serverClient postPath:[[MKStoreKitConfigs.ownServerURL path] stringByAppendingPathComponent:@"verifyProduct.php"]
+                 parameters:@{ @"receiptdata" : receiptData}
+                    success:^(AFHTTPRequestOperation *operation, id responseObject) {
 
         if (responseObject && [[responseObject valueForKey:@"result"] intValue] == 1) {
             if (completionBlock) {
